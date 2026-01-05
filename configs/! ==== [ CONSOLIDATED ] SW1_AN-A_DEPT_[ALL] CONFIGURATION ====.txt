@@ -1,0 +1,154 @@
+! ==== SW1_AN_DEPT_INFORMATICS CONFIGURATION ====
+! ==== BASIC CONF. ====
+
+enable
+conf t
+hostname SW1_AN_DEPT_INFORMATICS
+
+banner motd #
+--------------------------------------
+SW1_AN_DEPT_INFORMATICS
+--------------------------------------#
+
+! clock set 00:00:00 1 Jan 2000
+no ip domain-lookup
+enable secret enabled
+service password-encryption
+do wr
+
+line con 0
+logging synchronous
+password con@2025
+login
+exec-timeout 150 0
+exit 
+do wr
+
+line vty 0 15
+logging synchronous
+password vty@2025
+login
+exec-timeout 150 0
+exit 
+do wr
+
+!ip http server
+!ip http secure-server
+!no ip http server
+!no ip http-server
+
+ip domain-name IT.AC.MA
+crypto key generate rsa
+yes
+1024
+ip ssh version 2
+
+line vty 0 15
+transport input ssh
+transport output ssh
+login local
+exit
+ip ssh time-out 120
+ip ssh authentication-retries 3
+aaa new-model
+aaa authentication login default local
+username mngr password mngr@2025
+do wr
+
+! ==== VTP CONF. ====
+
+vtp mode client
+vtp domain IT.AC.MA        
+vtp password Vtp@2025       
+vtp version 2
+exit
+wr
+
+! ==== SWITCHPORT CONF. ====
+
+conf t
+interface gig 0/1
+switchport mode trunk
+switchport trunk allowed vlan 100,101,110,111,120,121,130,131,140,141,190,191,200,201
+no shutdown
+exit
+
+! ADMIN GROUP (Ports 1-2)
+! Data: 130 | Voice: 131
+interface range FastEthernet0/1 - 2
+description ADMIN_USERS
+switchport mode access
+switchport access vlan 130
+switchport voice vlan 131
+! spanning-tree portfast
+no shutdown
+exit
+
+! PROF GROUP (Ports 3-5)
+! Data: 120 | Voice: 121
+interface range FastEthernet0/3 - 5
+description PROF_USERS
+switchport mode access
+switchport access vlan 120
+switchport voice vlan 121
+! spanning-tree portfast
+no shutdown
+exit
+
+! ETD GROUP (Ports 6-10)
+! Data: 110 | Voice: 111
+interface range FastEthernet0/6 - 10
+description ETD_STUDENTS
+switchport mode access
+switchport access vlan 110
+switchport voice vlan 111
+! spanning-tree portfast
+no shutdown
+exit
+
+! HOST GROUP (Ports 11-14)
+! Data: 140 | Voice: 141
+interface range FastEthernet0/11 - 14
+description HOST_USERS
+switchport mode access
+switchport access vlan 140
+switchport voice vlan 141
+! spanning-tree portfast
+no shutdown
+exit
+
+! WIRELESS GROUP (Ports 15-18)
+! Data: 190 | Voice: 191
+interface range FastEthernet0/15 - 18
+description WIRELESS_APS
+switchport mode access
+switchport access vlan 190
+switchport voice vlan 191
+! spanning-tree portfast
+no shutdown
+exit
+do wr
+
+! ==== MNGR SVI CONF. ====
+
+conf t
+interface vlan200
+ip address 200.200.20.21 255.255.0.0
+no shutdown
+do wr
+exit
+
+ip default-gateway 200.200.255.254
+
+! ==== ETHERCHANNEL CONF. ====
+
+conf t
+
+interface range gigabitEthernet 0/1 - 2
+switchport mode trunk
+channel-group 1 mode active
+exit
+
+interface port-channel 1
+switchport mode trunk
+exit

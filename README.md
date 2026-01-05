@@ -23,12 +23,12 @@ The deployment was executed in **5 Incremental Snapshots**, ensuring a stable pr
 
 ## Key Features
 
-### 🏛 Network Architecture
+### Network Architecture
 - **3-Layer Hierarchical Model:** Dedicated Core (High-speed switching), Distribution (Policy aggregation), and Access (User connectivity) layers.
 - **Resiliency:** Link Aggregation via **LACP EtherChannels** (802.3ad) between all layers to prevent bottlenecks and provide redundancy.
 - **Inter-VLAN Routing:** Centralized SVI-based routing performed by the Core Multilayer Switch.
 
-### 🛡 Security Implementation
+### Security Implementation
 - **Recursive Management (Jump Host):** SSH access to Distribution and Access switches is restricted. Administrators must "hop" through the Core Switch (`200.200.255.254`) to reach downstream devices.
 - **Data Plane Isolation:** Extended ACLs prevent inter-departmental traffic (e.g., Students cannot access Admin VLANs) while allowing access to shared servers.
 - **Access Layer Hardening:** 
@@ -36,7 +36,7 @@ The deployment was executed in **5 Incremental Snapshots**, ensuring a stable pr
   - **DHCP Snooping:** Trusted boundaries configured to block Rogue DHCP servers.
 - **AAA:** Centralized authentication via **RADIUS** with local fallback users.
 
-### 📞 Converged Services (VoIP)
+### Converged Services (VoIP)
 - **Cisco CME (Call Manager Express):** Deployed on an ISR Router to handle call signaling.
 - **Voice VLANs:** Dedicated VLANs (Auxiliary VLANs) for IP Phones to ensure segmentation.
 - **DHCP Option 150:** Automated TFTP server discovery for IP Phone provisioning.
@@ -44,7 +44,11 @@ The deployment was executed in **5 Incremental Snapshots**, ensuring a stable pr
 ## Architecture & Topology
 
 ### VLAN Segmentation Strategy
-The network uses a Class C private addressing scheme (`200.200.x.x`), segmented by function and building.
+The network uses a Class C private addressing scheme (`200.200.x.x`) <-- MNGR, segmented by function and building.
+
+```
+~~~ESPOS@#)(#JF)DF~~~
+```
 
 ## Technology Stack
 
@@ -63,7 +67,7 @@ The network uses a Class C private addressing scheme (`200.200.x.x`), segmented 
 
 ### Installation & Usage
 1.  **Clone the Repository:**
-    ```bash
+    ```bash 
     git clone https://github.com/SICROMONOCO/Secure-Campus-Network-Design.git
     ```
 2.  **Open the Simulation:**
@@ -112,9 +116,9 @@ Secure-Campus-Network-Design/
 
 The following improvements are recommended for the next iteration:
 
-    Implementation of HSRP for First Hop Redundancy at the Core.
-    Deployment of a WLC (Wireless LAN Controller) for centralized Wi-Fi management.
-    Migration from ACLs to a Zone-Based Firewall or dedicated ASA.
+- Implementation of HSRP for First Hop Redundancy at the Core.
+- Deployment of a WLC (Wireless LAN Controller) for centralized Wi-Fi management.
+- Migration from ACLs to a Zone-Based Firewall or dedicated ASA.
 
 ---
 

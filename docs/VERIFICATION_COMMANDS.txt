@@ -1,0 +1,267 @@
+================================================================================
+    NETWORK VERIFICATION COMMAND REFERENCE
+    Project: Secure Campus Network Design
+    Documentation: Snapshot-by-Snapshot Testing Protocol
+================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ SNAPSHOT 1: BASE CONFIGURATION & VLAN STRUCTURE                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+DEVICE HARDENING (SSH/PASSWORDS):
+    [COMM] show version
+           ! Verify IOS supports SSH (look for "k9" in image name)
+    [COMM] show ip ssh
+           ! Expected: "SSH Enabled - version 2.0"
+    [COMM] show run | include service
+           ! Expected: "service password-encryption"
+    [COMM] show run | section line
+           !  Verify "transport input ssh" on VTY lines
+    [TEST] Attempt SSH connection from Admin PC: 
+           ssh -l mngr 200.200.255.254
+           ! Should prompt for password, NOT allow Telnet
+
+VLAN DATABASE:
+    [COMM] show vlan brief
+           !  Verify VLANs 100-201 exist and are active
+    [COMM] show vlan id 110
+           ! Detailed info on a specific VLAN
+    [TEST] Check if unused ports are in VLAN 999: 
+           show vlan id 999
+
+VTP PROPAGATION:
+    [COMM] show vtp status
+           ! On Core:  Mode = Server, Configuration Revision > 0
+           ! On Others: Mode = Client, Same Revision Number
+    [COMM] show vtp password
+           ! Verify domain = "IT. AC.MA"
+    [TEST] Create a test VLAN on Core (e.g., VLAN 888), check if it 
+           appears on Distribution switches within 30 seconds
+
+INTER-VLAN ROUTING (SVI):
+    [COMM] show ip interface brief
+           ! All VLAN interfaces should show "up/up"
+    [COMM] show ip route
+           ! Should see "C" (Connected) routes for all 10. X.0.0/24 networks
+    [TEST] Ping from Core to itself across VLANs: 
+           ping 10.110.0.1 source 10.130.0.1
+           ! Should succeed (100% success rate)
+
+TRUNK LINKS:
+    [COMM] show interfaces trunk
+           !  Verify encapsulation = "802.1q" and allowed VLANs match config
+    [COMM] show interfaces gi1/0/23 switchport
+           ! Look for "Administrative Mode:  trunk"
+    [TEST] Shutdown one trunk port and verify the other carries traffic
+
+DHCP RELAY (IP HELPER):
+    [COMM] show run interface vlan 110
+           ! Should contain "ip helper-address 10.100.0.10"
+    [TEST] Connect a PC to VLAN 110, set it to DHCP, verify it gets
+           an IP in the range 10.110.0.X
+
+ACCESS PORT CONFIGURATION:
+    [COMM] show interfaces fa0/1 switchport
+           ! Look for "Access Mode VLAN:  110" and "Voice VLAN: 111"
+    [COMM] show spanning-tree interface fa0/1 detail
+           ! Should show "PortFast BPDU Guard" if enabled
+    [TEST] Connect a PC, verify it gets VLAN 110 tagged traffic
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ SNAPSHOT 2: INFRASTRUCTURE SERVICES (NTP/SYSLOG/AAA)                     │
+└──────────────────────────────────────────────────────────────────────────┘
+
+NTP (NETWORK TIME PROTOCOL):
+    [COMM] show ntp status
+           ! Expected: "Clock is synchronized, stratum 2"
+    [COMM] show ntp associations
+           ! Server 200.200.200.110 should be marked with "*" (synced)
+    [COMM] show clock detail
+           ! Verify time matches NTP server time
+    [TEST] Change time on Core manually, wait 5 minutes, verify NTP
+           corrects it automatically
+
+SYSLOG (CENTRALIZED LOGGING):
+    [COMM] show logging
+           ! Look for "Logging to 200.200.200.110"
+           ! Trap logging level should be "debugging" or "informational"
+    [TEST] Trigger a log event (e.g., shutdown/no shutdown an interface),
+           then check Syslog server GUI for the event message
+
+TFTP (BACKUP/RESTORE):
+    [INFO] No real-time verification command exists for TFTP client status
+    [TEST] Manually backup configuration: 
+           copy running-config tftp://200.200.200.110/CORE_MLS_backup.cfg
+           !  Check TFTP server for the file
+
+AAA RADIUS (AUTHENTICATION):
+    [COMM] show aaa servers
+           ! Should list RADIUS server 200.200.200.110
+    [COMM] show radius statistics
+           ! Look for "Access-Requests" and "Access-Accepts" counts
+    [COMM] debug radius
+           ! Shows real-time RADIUS packet exchanges (USE SPARINGLY)
+    [COMM] debug aaa authentication
+           ! Shows internal decision logic (USE SPARINGLY)
+    [TEST] SSH using RADIUS account:
+           ssh -l admin 200.200.255.254
+           ! Should authenticate via RADIUS (check server logs)
+    [TEST] Disconnect RADIUS server, SSH using local fallback: 
+           ssh -l AdminLocal 200.200.255.254
+           ! Should work (proves fallback logic)
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ SNAPSHOT 3: ETHERCHANNEL, PORT SECURITY, DHCP SNOOPING                   │
+└──────────────────────────────────────────────────────────────────────────┘
+
+ETHERCHANNEL (LACP):
+    [INFO] Best practice: Use same Port-Channel number on both ends
+           (e.g., Po3 on Core and Po3 on MLS1_FP)
+    [COMM] show etherchannel summary
+           ! Look for "Po1(SU)" - SU means Layer2/UP
+           ! Member ports should show "(P)" = Bundled
+    [COMM] show etherchannel 1 detail
+           ! Shows LACP negotiation state, protocol, member interfaces
+    [COMM] show lacp neighbor
+           ! Verify peer switch MAC and system priority
+    [TEST] Disconnect one cable from the bundle, verify traffic continues
+           on remaining link (no ping drops)
+
+PORT SECURITY:
+    [COMM] show port-security
+           ! Shows global stats:  Total Secure Ports, Violations count
+    [COMM] show port-security interface fa0/1
+           ! Expected Port Status: "Secure-up"
+           ! Look for "Max MAC Addrs:  2", "Violation Mode: Restrict"
+    [COMM] show port-security address
+           ! Should list learned MAC addresses with "dhcp" or "sticky" type
+    [TEST] Connect a 3rd device (e.g., hub) to a secured port: 
+           !  Expected: Packets dropped, "SecurityViolation" counter increments
+           ! Port should NOT shutdown (because mode = restrict)
+    [TEST] Connect unauthorized device to VLAN 999 port:
+           ! Port should immediately go to "err-disabled" (mode = shutdown)
+
+DHCP SNOOPING: 
+    [COMM] show ip dhcp snooping
+           !  Expected: "DHCP snooping is enabled"
+           ! Verify VLANs 100-201 are listed
+           ! "Option 82" should be "disabled"
+    [COMM] show ip dhcp snooping binding
+           ! Lists legitimately learned MAC-to-IP mappings
+           ! Each entry shows: MAC, IP, VLAN, Interface, Lease Time
+    [COMM] show ip dhcp snooping database
+           ! Shows binding database agent status
+    [TEST] Connect a Rogue DHCP Server to an untrusted port (e.g., Fa0/5):
+           ! Expected:  DHCP Offers from the rogue are dropped
+           !  Clients should still get IPs from the legitimate server (10.100.0.10)
+    [TEST] Verify trusted ports: 
+           show run interface gi0/1
+           ! Should contain "ip dhcp snooping trust"
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ SNAPSHOT 4: ACCESS CONTROL LISTS (ACLs) & JUMP HOST SECURITY             │
+└──────────────────────────────────────────────────────────────────────────┘
+
+INTER-VLAN ISOLATION (DATA PLANE):
+    [COMM] show ip access-lists
+           ! Lists all ACLs with hit counters for each rule
+    [COMM] show ip access-lists ISOLATE_CLIENT_VLANS
+           ! Verify rules match your design (e.g., deny 10.0.0.0/8)
+    [COMM] show ip interface vlan 110
+           ! Look for "Outgoing access list is not set"
+           ! "Inbound access list is ISOLATE_CLIENT_VLANS"
+    [TEST] Ping from Student PC (VLAN 110) to Prof PC (VLAN 120):
+           ping 10.120.0.10
+           ! Expected: "Request timed out" (blocked by ACL)
+    [TEST] Ping from Student PC (VLAN 110) to Server (VLAN 100):
+           ping 10.100.0.10
+           ! Expected: Success (allowed by ACL)
+
+RECURSIVE SSH ACCESS (JUMP HOST):
+    [COMM] show access-lists 10
+           ! (If using standard ACL for VTY protection)
+    [COMM] show line vty 0 15
+           ! Look for "Access Class 10 in" or "JUMP_HOST_ONLY"
+    [TEST] Attempt direct SSH from Admin PC to Access Switch:
+           ssh -l mngr 200.200.20.31
+           ! Expected: Connection refused (blocked by ACL)
+    [TEST] Recursive SSH (Admin → Core → Access):
+           1. ssh -l mngr 200.200.255.254  (Admin to Core)
+           2. ssh 200.200.20.31             (Core to Access)
+           ! Expected: Both connections succeed
+
+ACL HIT COUNTERS:
+    [INFO] Use hit counters to verify ACL rules are being evaluated
+    [COMM] show ip access-lists | include matches
+           ! Non-zero matches = Rule is active
+    [TEST] Clear counters and re-test:
+           clear ip access-list counters
+           ! Then generate test traffic and check again
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ SNAPSHOT 5: VOICE OVER IP (CME & TELEPHONY)                             │
+└──────────────────────────────────────────────────────────────────────────┘
+
+ROUTER-CORE CONNECTIVITY:
+    [COMM] show ip interface brief
+           ! On Router:  Gi0/0 should be 172.16.0.1 (up/up)
+           ! On Core: Gi1/0/1 should be 172.16.0.2 (up/up)
+    [COMM] show ip route
+           !  On Router: Should see route to 10.0.0.0/8 via 172.16.0.2
+           ! On Core: Should see default route 0.0.0.0/0 via 172.16.0.1
+    [TEST] Ping from Router to Core SVI:
+           ping 10.110.0.1 source 172.16.0.1
+           ! Should succeed
+
+CME TELEPHONY SERVICE:
+    [COMM] show telephony-service
+           ! Verify "Max Phones: 50", "IP Source: 172.16.0.1 port 2000"
+    [COMM] show ephone registered
+           ! Lists all currently registered IP Phones
+           ! Look for MAC address, IP, Extension number
+    [COMM] show ephone-dn
+           ! Lists directory numbers (extensions) configured
+    [TEST] Power on an IP Phone connected to VLAN 111 port:
+           ! Phone should display "Registered" on screen
+           ! Run "show ephone" - Status should be "REGISTERED"
+
+DHCP OPTION 150 (TFTP):
+    [COMM] show ip dhcp binding
+           ! (On Router CME) Verify phones received IPs from Voice pools
+    [COMM] show ip dhcp pool VOICE_ETD
+           ! Should show "Option 150 ip 172.16.0.1"
+    [TEST] Check phone GUI (Advanced Settings):
+           !  TFTP Server 1 should be "172.16.0.1"
+
+VOICE CALL TESTING:
+    [TEST] Place a call from Extension 1001 to 2001:
+           !  Dial 2001 on Phone 1001
+           ! Expected: Phone 2001 rings, call connects, bidirectional audio
+    [COMM] show call active voice brief
+           ! (During active call) Shows source/dest, codec, duration
+    [COMM] show ephone offhook
+           ! Lists phones currently off-hook (in a call)
+
+QOS (QUALITY OF SERVICE):
+    [COMM] show mls qos
+           ! Verify QoS is globally enabled
+    [COMM] show mls qos interface fa0/1
+           ! Should show "trust state: trust cos" (for Voice VLANs)
+    [TEST] Monitor jitter during call:
+           ! Use phone's Statistics menu or "show call active voice"
+           ! Jitter should be < 30ms for acceptable quality
+
+================================================================================
+    END OF VERIFICATION COMMAND REFERENCE
+================================================================================
+
+LEGEND:
+    [COMM]  = Command to execute in CLI
+    [TEST]  = Manual functional test procedure
+    [INFO]  = Informational note or best practice
+    [WARN]  = Warning or common pitfall
+
+DEBUGGING NOTES:
+    • Always use "terminal monitor" when debugging from SSH session
+    • Use "undebug all" to stop all debugs (they consume CPU)
+    • For production:  Change logging level from "debugging" to "informational"

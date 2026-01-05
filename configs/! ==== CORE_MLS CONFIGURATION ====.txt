@@ -1,0 +1,404 @@
+! ==== CORE_MLS CONFIGURATION ====
+! ==== BASIC CONF. ====
+
+enable
+conf t
+hostname CORE_MLS
+
+banner motd #
+--------------------------------------
+CORE_MLS
+--------------------------------------#
+
+clock set 00:00:00 1 Jan 2000
+no ip domain-lookup
+enable secret enabled
+service password-encryption
+do wr
+
+line con 0
+logging synchronous
+password con@2025
+login
+exec-timeout 150 0
+exit 
+do wr
+
+line vty 0 15
+logging synchronous
+password vty@2025
+login
+exec-timeout 150 0
+exit 
+do wr
+
+ip http server
+ip http secure-server
+no ip http server
+no ip http-server
+
+ip domain-name IT.AC.MA
+crypto key generate rsa
+1024
+ip ssh version 2
+
+line vty 0 15
+transport input ssh
+transport output ssh
+login local
+exit
+
+ip ssh time-out 120
+ip ssh authentication-retries 3
+
+aaa new-model
+aaa authentication login default local
+
+username mngr password mngr@2025
+do wr
+
+! ==== MAIN VLANs CREATION IN CORE_MLS ====
+! ==== DHCP SERVER VLANS ====
+
+ip routing
+
+
+vlan 100
+name DHCP_SERVER
+exit
+interface vlan100
+ip address 10.100.0.1 255.255.255.0
+no shutdown
+exit
+
+vlan 101
+name DHCP_VOICE
+exit
+interface vlan101
+ip address 10.101.0.1 255.255.255.0
+no shutdown
+exit
+
+! ==== END DEVICE VLANS (DATA ONLY) ====
+
+vlan 110
+name ETD_VOICE
+exit
+interface vlan110
+ip address 10.110.0.1 255.255.255.0
+no shutdown
+exit
+
+vlan 120
+name PROF_VOICE
+exit
+interface vlan120
+ip address 10.120.0.1 255.255.255.0
+no shutdown
+exit
+
+vlan 130
+name ADMIN_VOICE
+exit
+interface vlan130
+ip address 10.130.0.1 255.255.255.0
+no shutdown
+exit
+
+vlan 140
+name HOST_VOICE
+exit
+interface vlan140
+ip address 10.140.0.1 255.255.255.0
+no shutdown
+exit
+
+vlan 190
+name WIRELESS_VOICE
+exit
+interface vlan190
+ip address 10.190.0.1 255.255.255.0
+no shutdown
+exit
+
+! ==== END DEVICE VLANS (VOICE ONLY) ====
+
+vlan 111
+name ETD_DATA
+exit
+interface vlan111
+ip address 10.111.0.1 255.255.255.0
+no shutdown
+exit
+
+vlan 121
+name PROF_DATA
+exit
+interface vlan121
+ip address 10.121.0.1 255.255.255.0
+no shutdown
+exit
+
+vlan 131
+name ADMIN_DATA
+exit
+interface vlan131
+ip address 10.131.0.1 255.255.255.0
+no shutdown
+exit
+
+vlan 141
+name HOST_DATA
+exit
+interface vlan141
+ip address 10.141.0.1 255.255.255.0
+no shutdown
+exit
+
+vlan 191
+name WIRELESS_DATA
+exit
+interface vlan191
+ip address 10.191.0.1 255.255.255.0
+no shutdown
+exit
+
+! ==== MGMT VLANS ====
+
+vlan 200
+name MGMT
+exit
+interface vlan200
+ip address 200.200.255.254 255.255.0.0
+no shutdown
+exit
+
+vlan 201
+name MGMT_VOICE
+exit
+interface vlan201
+ip address 200.201.255.254 255.255.0.0
+no shutdown
+exit
+
+! ==== VTP CONF. ====
+
+vtp mode server
+vtp domain IT.AC.MA        
+vtp password Vtp@2025       
+vtp version 2
+exit
+wr
+
+! ==== SWITCHPORT CONF. ====
+
+conf t
+
+! Admin Distribution
+interface gig 1/0/17
+switchport mode trunk
+switchport trunk allowed vlan 100,101,110,120,130,140,190,200,201
+exit
+
+! Server Distribution
+interface gig 1/0/19
+switchport mode trunk
+switchport trunk allowed vlan 200,201,100,101
+exit
+
+! Site1 Distribution (Faculty)
+interface gig 1/0/23
+switchport mode trunk
+switchport trunk allowed vlan 100,101,110,120,130,140,190,200,201
+exit
+
+! Site2 Distribution (Annex)
+interface gig 1/0/21
+switchport mode trunk
+switchport trunk allowed vlan 100,101,110,120,130,140,190,200,201
+exit
+
+! ==== IPADDRHELPER CONF. ====
+
+! Consedring the DHCP Server IP : 10.100.0.10
+
+interface vlan 101
+name DHCP_VOICE
+ip helper-address 10.100.0.10
+exit
+
+interface vlan 110
+name ETD_DATA
+ip helper-address 10.100.0.10
+exit
+
+interface vlan 120
+name PROF_DATA
+ip helper-address 10.100.0.10
+exit
+
+interface vlan 130
+name ADMIN_DATA
+ip helper-address 10.100.0.10
+exit
+
+interface vlan 140
+name HOST_DATA
+ip helper-address 10.100.0.10
+exit
+
+interface vlan 190
+name WIRELESS_DATA
+ip helper-address 10.100.0.10
+exit
+
+interface vlan 200
+name MGMT_DATA
+! ip helper-address 10.100.0.10
+exit
+
+interface vlan 201
+name MGMT_VOICE
+ip helper-address 10.100.0.10
+exit
+
+interface vlan 121
+name PROF_VOICE
+ip helper-address 10.100.0.10
+exit
+
+interface vlan 131
+name ADMIN_VOICE
+ip helper-address 10.100.0.10
+exit
+
+interface vlan 141
+name HOST_VOICE
+ip helper-address 10.100.0.10
+exit
+
+interface vlan 191
+name WIRELESS_VOICE
+ip helper-address 10.100.0.10
+exit
+
+! ==== AAA RADIUS CONF. (AUTHENTIFICATION ONLY) (STILL NEEDS SOM MODIFICATION) ====
+
+conf t
+
+aaa new-model
+
+radius server RADIUS_SERVER
+address ipv4 200.200.200.110 auth-port 1645
+key 123456789A
+exit
+
+aaa authentication login default group radius local
+aaa authentication login enable group radius local
+
+line con 0
+login authentication default
+exit
+
+line vty 0 15
+login authentication default
+exit
+
+	
+
+! ==== NTP CONF. ====
+
+conf t
+! Point to the Server
+ntp server 200.200.200.110
+! Authentication
+ntp authenticate 
+ntp trusted-key 1
+ntp authentication-key 1 md5 ntp@2025
+exit
+wr
+
+! ==== SYSLOG CONF. ====
+
+conf t
+! Enable Logging
+logging on 
+! Point to Server
+logging host 200.200.200.110
+! Set Level (Debugging ==> testing, Informational ==> production, if available)
+logging trap debugging
+! Timestamp logs so they match the NTP time
+service timestamps log datetime msec 
+exit
+wr
+
+! ==== ETHERCHANNEL CONF. ====
+
+conf t
+
+! --- Connection to SW1_SC (Group 1) ---
+configure terminal
+interface range gigabitEthernet 1/0/19 - 20
+switchport trunk encapsulation dot1q
+switchport mode trunk
+channel-group 1 mode active
+exit
+
+interface port-channel 1
+switchport mode trunk
+exit
+
+! --- Connection to SW1_ADMIN (Group 2) ---
+interface range gigabitEthernet 1/0/17 - 18
+switchport trunk encapsulation dot1q
+switchport mode trunk
+channel-group 2 mode active
+exit
+
+interface port-channel 2
+switchport mode trunk
+exit
+
+! --- Connection to MLS1_FP (Group 3) ---
+interface range gigabitEthernet 1/0/23 - 24
+switchport trunk encapsulation dot1q
+switchport mode trunk
+channel-group 3 mode active
+exit
+
+interface port-channel 3
+switchport mode trunk
+exit
+
+! --- Connection to MLS1_ANNEX (Group 4) ---
+interface range gigabitEthernet 1/0/21 - 22
+switchport trunk encapsulation dot1q
+switchport mode trunk
+channel-group 4 mode active
+exit
+
+interface port-channel 4
+switchport mode trunk
+exit
+
+! ==== DHCP SNOOPING CONF. ====
+
+conf t
+
+! Enable the feature globally
+ip dhcp snooping
+
+! Tell it which VLANs to secure (Add ALL your user/data/voice VLANs here)
+ip dhcp snooping vlan 100-201
+
+! This prevents the switch from inserting "Option 82" data which often blocks DHCP 
+! on non-Cisco DHCP servers.
+no ip dhcp snooping information option
+exit
+do wr
+
+configure terminal
+! Trust all downstream EtherChannels leading to Dist switches
+interface range gigabitEthernet 1/0/17 - 24
+ip dhcp snooping trust
+exit

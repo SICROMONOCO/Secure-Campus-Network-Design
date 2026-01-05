@@ -1,0 +1,211 @@
+! ============================================================================
+! SW1_ADMIN - COMPLETE CONFIGURATION SCRIPT
+! Project:  Secure Campus Network Design
+! Device Role: Administration Distribution Switch
+! Snapshots: 1-5 (Complete Deployment)
+! ============================================================================
+
+enable
+configure terminal
+
+! ============================================================================
+!  SNAPSHOT 1: BASE CONFIGURATION & DEVICE HARDENING
+!  ============================================================================
+
+! --- Hostname & Domain ---
+hostname SW1_ADMIN
+ip domain-name IT.AC.MA
+
+! --- Security Banner ---
+banner motd #
+-------------------------------------------------------
+SW1_ADMIN - SWITCH ADMINISTRATION
+Acces reserve aux administrateurs autorises.  
+Toute tentative d'intrusion sera journalisee. 
+-------------------------------------------------------
+#
+
+! --- System Services ---
+no ip domain-lookup
+service password-encryption
+service timestamps log datetime msec
+service timestamps debug datetime msec
+
+! --- Passwords & Secrets ---
+enable secret class
+
+! --- Local User Account ---
+username mngr privilege 15 secret mngr@2025
+
+! --- Disable Insecure Services ---
+no ip http server
+no ip http secure-server
+
+! --- SSH Configuration ---
+crypto key generate rsa general-keys modulus 1024
+ip ssh version 2
+ip ssh time-out 120
+ip ssh authentication-retries 3
+
+! --- Console Line ---
+line console 0
+ logging synchronous
+ password con@2025
+ login
+ exec-timeout 15 0
+ exit
+
+! --- VTY Lines (SSH Only) ---
+line vty 0 15
+ logging synchronous
+ password vty@2025
+ transport input ssh
+ transport output ssh
+ login local
+ exec-timeout 15 0
+ exit
+
+!  ============================================================================
+! SNAPSHOT 1: VTP CLIENT CONFIGURATION
+! ============================================================================
+
+! --- VTP Client (Receives VLAN Database from Core) ---
+vtp mode client
+vtp domain IT. AC.MA
+vtp password Vtp@2025
+
+! ============================================================================
+! SNAPSHOT 1: ACCESS PORT FOR ADMIN PC & PHONE
+! ============================================================================
+
+! --- Admin Office PC + Phone (Data:  200, Voice: 201) ---
+interface FastEthernet 0/24
+ description ADMIN_OFFICE_PC_PHONE
+ switchport mode access
+ switchport access vlan 200
+ switchport voice vlan 201
+ spanning-tree portfast
+ no shutdown
+ exit
+
+!  ============================================================================
+! SNAPSHOT 2: INFRASTRUCTURE SERVICES (NTP, SYSLOG)
+! ============================================================================
+
+! --- NTP Configuration ---
+ntp server 200.200.200.110
+ntp authenticate
+ntp trusted-key 1
+ntp authentication-key 1 md5 ntp@2025
+
+! --- Syslog Configuration ---
+logging on
+logging host 200.200.200.110
+logging trap debugging
+
+!  ============================================================================
+! SNAPSHOT 3: ETHERCHANNEL TO CORE (LACP)
+! ============================================================================
+
+! --- Physical Interfaces for EtherChannel ---
+interface range GigabitEthernet 0/1 - 2
+ description UPLINK_TO_CORE
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 100,101,110,111,120,121,130,131,140,141,190,191,200,201
+ channel-group 2 mode active
+ exit
+
+!  --- Logical Port-Channel Interface ---
+interface port-channel 2
+ description ETHERCHANNEL_TO_CORE
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 100,101,110,111,120,121,130,131,140,141,190,191,200,201
+ exit
+
+! ============================================================================
+! SNAPSHOT 3: DHCP SNOOPING CONFIGURATION
+! ============================================================================
+
+!  --- Enable DHCP Snooping Globally ---
+ip dhcp snooping
+ip dhcp snooping vlan 100-201
+no ip dhcp snooping information option
+
+! --- Trust the Uplink to Core ---
+interface range GigabitEthernet 0/1 - 2
+ ip dhcp snooping trust
+ exit
+
+! --- Rate Limit User Port ---
+interface FastEthernet 0/24
+ ip dhcp snooping limit rate 10
+ exit
+
+! ============================================================================
+!  SNAPSHOT 3: PORT SECURITY (ADMIN PORT & UNUSED PORTS)
+! ============================================================================
+
+! --- Secure Admin Port (PC + Phone = Max 2 MACs) ---
+interface FastEthernet 0/24
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ switchport port-security aging time 60
+ exit
+
+! --- Secure Unused Ports ---
+interface range FastEthernet 0/1 - 23
+ description UNUSED_PORTS
+ switchport mode access
+ switchport access vlan 999
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation shutdown
+ shutdown
+ exit
+
+! ============================================================================
+! SNAPSHOT 4: MANAGEMENT ACCESS (JUMP HOST SECURITY)
+! ============================================================================
+
+! --- Standard ACL:  Only Core Switch Can SSH ---
+ip access-list standard JUMP_HOST_ONLY
+ remark Allow only Core Switch Management IP
+ permit 200.200.255.254
+ deny any
+ exit
+
+! --- Apply to VTY Lines ---
+line vty 0 15
+ access-class JUMP_HOST_ONLY in
+ exit
+
+! ============================================================================
+!  SNAPSHOT 1: MANAGEMENT SVI (IN-BAND MANAGEMENT)
+! ============================================================================
+
+!  --- Management VLAN Interface ---
+interface vlan 200
+ description MGMT_INTERFACE
+ ip address 200.200.10.31 255.255.0.0
+ no shutdown
+ exit
+
+! --- Default Gateway (Points to Core) ---
+ip default-gateway 200.200.255.254
+
+! ============================================================================
+! FINAL STEPS: SAVE CONFIGURATION
+! ============================================================================
+
+end
+write memory
+
+! ============================================================================
+!  END OF SW1_ADMIN CONFIGURATION
+! Total Snapshots:  5
+! Last Updated: 2026-01-05
+!  ============================================================================

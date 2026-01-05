@@ -1,0 +1,169 @@
+! ==== MLS2_MAIN_ANNEX CONFIGURATION ====
+! ==== BASIC CONF. ====
+
+enable
+conf t
+hostname MLS2_MAIN_ANNEX
+
+banner motd #
+--------------------------------------
+MLS2_MAIN_ANNEX
+--------------------------------------#
+
+! clock set 00:00:00 1 Jan 2000
+no ip domain-lookup
+enable secret enabled
+service password-encryption
+do wr
+
+line con 0
+logging synchronous
+password con@2025
+login
+exec-timeout 150 0
+exit 
+do wr
+
+line vty 0 15
+logging synchronous
+password vty@2025
+login
+exec-timeout 150 0
+exit 
+do wr
+
+!ip http server
+!ip http secure-server
+!no ip http server
+!no ip http-server
+
+ip domain-name IT.AC.MA
+crypto key generate rsa
+1024
+ip ssh version 2
+
+line vty 0 15
+transport input ssh
+transport output ssh
+login local
+exit
+ip ssh time-out 120
+ip ssh authentication-retries 3
+aaa new-model
+aaa authentication login default local
+username mngr password mngr@2025
+do wr
+
+! ==== VTP CONF. ====
+
+vtp mode client
+vtp domain IT.AC.MA        
+vtp password Vtp@2025       
+vtp version 2
+exit
+wr
+
+! ==== SWITCHPORT CONF. ====
+
+conf t
+! Core MLS uplink
+int gig 1/0/23
+! switchport trunk encapsluation dot1q
+switchport mode trunk
+switchport trunk allowed vlan 100,101,110,111,120,121,130,131,140,141,190,191,200,201
+exit
+
+! To Access SWs downlink
+int range gig 1/0/1 - 6
+! switchport trunk encapsluation dot1q
+switchport mode trunk
+switchport trunk allowed vlan 100,101,110,111,120,121,130,131,140,141,190,191,200,201
+exit
+
+! ==== MNGR SVI CONF. ====
+
+conf t
+interface vlan200
+ip address 200.200.100.102 255.255.0.0
+no shutdown
+wr
+exit
+ip default-gateway 200.200.255.254
+
+! ==== ETHERCHANNEL CONF. ====
+
+conf t
+
+! -- UPLINK to Core --
+! --- Connection to Core (Group 4) ---
+interface range gigabitEthernet 1/0/23 - 24
+switchport trunk encapsulation dot1q
+switchport mode trunk
+channel-group 4 mode active
+exit
+
+interface port-channel 4
+switchport mode trunk
+exit
+
+! -- DOWNLINK to ACCESS --
+! --- Connection to DEPT_MATH (Group 31) ---
+interface range gigabitEthernet 1/0/5 - 6
+switchport trunk encapsulation dot1q
+switchport mode trunk
+channel-group 31 mode active
+exit
+
+interface port-channel 31
+switchport mode trunk
+exit
+
+! --- Connection to DEPT_INFO (Group 32) ---
+interface range gigabitEthernet 1/0/3 - 4
+switchport trunk encapsulation dot1q
+switchport mode trunk
+channel-group 32 mode active
+exit
+
+interface port-channel 32
+switchport mode trunk
+exit
+
+! --- Connection to DEPT_PHYS (Group 33) ---
+interface range gigabitEthernet 1/0/1 - 2
+switchport trunk encapsulation dot1q
+switchport mode trunk
+channel-group 33 mode active
+exit
+
+interface port-channel 33
+switchport mode trunk
+exit
+
+! ==== DHCP SNOOPING CONF. ====
+
+conf t
+
+! Enable the feature globally
+ip dhcp snooping
+
+! Tell it which VLANs to secure (Add ALL your user/data/voice VLANs here)
+ip dhcp snooping vlan 100-201
+
+! This prevents the switch from inserting "Option 82" data which often blocks DHCP 
+! on non-Cisco DHCP servers.
+no ip dhcp snooping information option
+exit
+do wr
+
+configure terminal
+! Trust all downstream EtherChannels leading to Dist switches
+interface range gigabitEthernet 1/0/1 - 6
+ip dhcp snooping trust
+exit
+
+configure terminal
+! Trust all Upstreames EtherChannels leading to Core
+interface range gigabitEthernet 1/0/23 - 24
+ip dhcp snooping trust
+exit

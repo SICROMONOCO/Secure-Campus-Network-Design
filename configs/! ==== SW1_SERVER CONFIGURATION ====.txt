@@ -1,0 +1,139 @@
+! ==== SW1_SERVER CONFIGURATION ====
+! ==== BASIC CONF. ====
+
+enable
+conf t
+hostname SW1_SERVER
+
+banner motd #
+--------------------------------------
+SW1_SERVER
+--------------------------------------#
+
+! clock set 00:00:00 1 Jan 2000
+no ip domain-lookup
+enable secret enabled
+service password-encryption
+do wr
+
+line con 0
+logging synchronous
+password con@2025
+login
+exec-timeout 150 0
+exit 
+do wr
+
+line vty 0 15
+logging synchronous
+password vty@2025
+login
+exec-timeout 150 0
+exit 
+do wr
+
+!ip http server
+!ip http secure-server
+!no ip http server
+!no ip http-server
+
+ip domain-name IT.AC.MA
+crypto key generate rsa
+1024
+ip ssh version 2
+
+line vty 0 15
+transport input ssh
+transport output ssh
+login local
+exit
+ip ssh time-out 120
+ip ssh authentication-retries 3
+aaa new-model
+aaa authentication login default local
+username mngr password mngr@2025
+do wr
+
+! ==== VTP CONF. ====
+
+vtp mode client
+vtp domain IT.AC.MA        
+vtp password Vtp@2025       
+vtp version 2
+exit
+wr
+
+! ==== SWITCHPORT CONF. ====
+
+conf t
+! Down link to SERVERS
+! Port for DHCP SERVER (VLAN 100)
+int fa 0/2
+switchport mode access
+switchport access vlan 100
+! spanning-tree portfast
+no shutdown
+exit
+
+! Port for SERVER ROOM PHONE (Voice 101)
+int fa 0/3
+switchport mode access
+switchport voice vlan 101
+! spanning-tree portfast
+no shutdown
+exit
+
+! Port for SERVER SERVICES
+int fa 0/1
+switchport mode access
+switchport access vlan 200
+! spanning-tree portfast
+no shutdown
+exit
+
+! Core MLS uplink
+int gig 0/2
+! switchport trunk encapsluation dot1q
+switchport mode trunk
+switchport trunk allowed vlan 100,101,200,201
+exit
+do wr
+
+
+! ==== MNGR SVI CONF. ====
+
+
+interface vlan200
+ip address 200.200.200.101 255.255.0.0
+no shutdown
+exit
+do wr
+
+
+ip default-gateway 200.200.255.254
+
+! ==== ETHERCHANNEL CONF. ====
+
+conf t
+interface range gigabitEthernet 0/1 - 2
+switchport trunk encapsulation dot1q
+switchport mode trunk
+channel-group 1 mode active
+exit
+
+interface port-channel 1
+switchport mode trunk
+exit
+
+! ==== DHCP SNOOPING CONF. ====
+
+conf t
+! The port connected to the DHCP SERVER
+interface Fa 0/2
+ip dhcp snooping trust
+exit
+
+! The Uplink Port-Channel to Core
+interface range GigabitEthernet 0/1 - 2
+ip dhcp snooping trust
+exit
