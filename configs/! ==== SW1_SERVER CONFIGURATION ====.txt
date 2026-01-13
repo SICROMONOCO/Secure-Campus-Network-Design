@@ -1,139 +1,219 @@
-! ==== SW1_SERVER CONFIGURATION ====
-! ==== BASIC CONF. ====
+! ============================================================================
+! SW1_SC - COMPLETE CONFIGURATION SCRIPT
+! Project:  Secure Campus Network Design
+! Device Role: Server Distribution Switch (Server Room)
+! Snapshots: 1-5 (Complete Deployment)
+! ============================================================================
 
 enable
-conf t
-hostname SW1_SERVER
+configure terminal
 
-banner motd #
---------------------------------------
-SW1_SERVER
---------------------------------------#
+! ============================================================================
+! SNAPSHOT 1: BASE CONFIGURATION & DEVICE HARDENING
+! ============================================================================
 
-! clock set 00:00:00 1 Jan 2000
-no ip domain-lookup
-enable secret enabled
-service password-encryption
-do wr
-
-line con 0
-logging synchronous
-password con@2025
-login
-exec-timeout 150 0
-exit 
-do wr
-
-line vty 0 15
-logging synchronous
-password vty@2025
-login
-exec-timeout 150 0
-exit 
-do wr
-
-!ip http server
-!ip http secure-server
-!no ip http server
-!no ip http-server
-
+! --- Hostname & Domain ---
+hostname SW1_SC
 ip domain-name IT.AC.MA
-crypto key generate rsa
-1024
-ip ssh version 2
 
-line vty 0 15
-transport input ssh
-transport output ssh
-login local
-exit
+! --- Security Banner ---
+banner motd #
+-------------------------------------------------------
+SW1_SC - SWITCH SERVEURS
+Acces reserve aux administrateurs autorises. 
+Toute tentative d'intrusion sera journalisee. 
+-------------------------------------------------------
+#
+
+! --- System Services ---
+no ip domain-lookup
+service password-encryption
+service timestamps log datetime msec
+service timestamps debug datetime msec
+
+! --- Passwords & Secrets ---
+enable secret class
+
+! --- Local User Account ---
+username mngr privilege 15 secret mngr@2025
+
+! --- Disable Insecure Services ---
+no ip http server
+no ip http secure-server
+
+! --- SSH Configuration ---
+crypto key generate rsa general-keys modulus 1024
+ip ssh version 2
 ip ssh time-out 120
 ip ssh authentication-retries 3
-aaa new-model
-aaa authentication login default local
-username mngr password mngr@2025
-do wr
 
-! ==== VTP CONF. ====
+! --- Console Line ---
+line console 0
+ logging synchronous
+ password con@2025
+ login
+ exec-timeout 15 0
+ exit
 
+! --- VTY Lines (SSH Only) ---
+line vty 0 15
+ logging synchronous
+ password vty@2025
+ transport input ssh
+ transport output ssh
+ login local
+ exec-timeout 15 0
+ exit
+
+!  ============================================================================
+! SNAPSHOT 1: VTP CLIENT CONFIGURATION
+! ============================================================================
+
+! --- VTP Client (Receives VLAN Database from Core) ---
 vtp mode client
-vtp domain IT.AC.MA        
-vtp password Vtp@2025       
-vtp version 2
-exit
-wr
+vtp domain IT.AC. MA
+vtp password Vtp@2025
 
-! ==== SWITCHPORT CONF. ====
+! ============================================================================
+! SNAPSHOT 1: ACCESS PORTS FOR SERVERS
+! ============================================================================
 
-conf t
-! Down link to SERVERS
-! Port for DHCP SERVER (VLAN 100)
-int fa 0/2
-switchport mode access
-switchport access vlan 100
-! spanning-tree portfast
-no shutdown
-exit
+! --- DHCP/TFTP Server (VLAN 100) ---
+interface FastEthernet 0/2
+ description SRV_DHCP_TFTP
+ switchport mode access
+ switchport access vlan 100
+ spanning-tree portfast
+ no shutdown
+ exit
 
-! Port for SERVER ROOM PHONE (Voice 101)
-int fa 0/3
-switchport mode access
-switchport voice vlan 101
-! spanning-tree portfast
-no shutdown
-exit
+!  --- Server Room Phone (Voice VLAN 101) ---
+interface FastEthernet 0/3
+ description PHONE_SERVER_ROOM
+ switchport mode access
+ switchport voice vlan 101
+ spanning-tree portfast
+ no shutdown
+ exit
 
-! Port for SERVER SERVICES
-int fa 0/1
-switchport mode access
-switchport access vlan 200
-! spanning-tree portfast
-no shutdown
-exit
+! --- Management/Syslog/RADIUS Server (VLAN 200) ---
+interface FastEthernet 0/1
+ description SRV_MGMT_SERVICES
+ switchport mode access
+ switchport access vlan 200
+ spanning-tree portfast
+ no shutdown
+ exit
 
-! Core MLS uplink
-int gig 0/2
-! switchport trunk encapsluation dot1q
-switchport mode trunk
-switchport trunk allowed vlan 100,101,200,201
-exit
-do wr
+! ============================================================================
+! SNAPSHOT 2: INFRASTRUCTURE SERVICES (NTP, SYSLOG)
+! ============================================================================
 
+! --- NTP Configuration ---
+ntp server 200.200.200.110
+ntp authenticate
+ntp trusted-key 1
+ntp authentication-key 1 md5 ntp@2025
 
-! ==== MNGR SVI CONF. ====
+! --- Syslog Configuration ---
+logging on
+logging host 200.200.200.110
+logging trap debugging
 
+! ============================================================================
+! SNAPSHOT 3: ETHERCHANNEL TO CORE (LACP)
+! ============================================================================
 
-interface vlan200
-ip address 200.200.200.101 255.255.0.0
-no shutdown
-exit
-do wr
+! --- Physical Interfaces for EtherChannel ---
+interface range GigabitEthernet 0/1 - 2
+ description UPLINK_TO_CORE
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 100,101,200,201
+ channel-group 1 mode active
+ exit
 
+!  --- Logical Port-Channel Interface ---
+interface port-channel 1
+ description ETHERCHANNEL_TO_CORE
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 100,101,200,201
+ exit
 
+! ============================================================================
+!  SNAPSHOT 3: DHCP SNOOPING CONFIGURATION
+! ============================================================================
+
+! --- Enable DHCP Snooping Globally ---
+ip dhcp snooping
+ip dhcp snooping vlan 100-201
+no ip dhcp snooping information option
+
+! --- Trust the DHCP Server Port ---
+interface FastEthernet 0/2
+ ip dhcp snooping trust
+ exit
+
+!  --- Trust the Uplink to Core ---
+interface range GigabitEthernet 0/1 - 2
+ ip dhcp snooping trust
+ exit
+
+! ============================================================================
+! SNAPSHOT 3: PORT SECURITY (UNUSED PORTS)
+! ============================================================================
+
+! --- Secure Unused Ports ---
+interface range FastEthernet 0/4 - 24
+ description UNUSED_PORTS
+ switchport mode access
+ switchport access vlan 999
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation shutdown
+ shutdown
+ exit
+
+! ============================================================================
+! SNAPSHOT 4: MANAGEMENT ACCESS (JUMP HOST SECURITY)
+! ============================================================================
+
+! --- Standard ACL:  Only Core Switch Can SSH ---
+ip access-list standard JUMP_HOST_ONLY
+ remark Allow only Core Switch Management IP
+ permit 200.200.255.254
+ deny any
+ exit
+
+! --- Apply to VTY Lines ---
+line vty 0 15
+ access-class JUMP_HOST_ONLY in
+ exit
+
+! ============================================================================
+!  SNAPSHOT 1: MANAGEMENT SVI (IN-BAND MANAGEMENT)
+! ============================================================================
+
+! --- Management VLAN Interface ---
+interface vlan 200
+ description MGMT_INTERFACE
+ ip address 200.200.10.10 255.255.0.0
+ no shutdown
+ exit
+
+! --- Default Gateway (Points to Core) ---
 ip default-gateway 200.200.255.254
 
-! ==== ETHERCHANNEL CONF. ====
+! ============================================================================
+! FINAL STEPS: SAVE CONFIGURATION
+! ============================================================================
 
-conf t
-interface range gigabitEthernet 0/1 - 2
-switchport trunk encapsulation dot1q
-switchport mode trunk
-channel-group 1 mode active
-exit
+end
+write memory
 
-interface port-channel 1
-switchport mode trunk
-exit
-
-! ==== DHCP SNOOPING CONF. ====
-
-conf t
-! The port connected to the DHCP SERVER
-interface Fa 0/2
-ip dhcp snooping trust
-exit
-
-! The Uplink Port-Channel to Core
-interface range GigabitEthernet 0/1 - 2
-ip dhcp snooping trust
-exit
+! ============================================================================
+!  END OF SW1_SC CONFIGURATION
+! Total Snapshots: 5
+! Last Updated: 2026-01-05
+! ============================================================================
