@@ -1,154 +1,269 @@
-! ==== SW1_AN_DEPT_INFORMATICS CONFIGURATION ====
-! ==== BASIC CONF. ====
+! ============================================================================
+! SW_ACCESS_UNIVERSAL - COMPLETE CONFIGURATION SCRIPT (TEMPLATE)
+! Project:  Secure Campus Network Design
+! Device Role:  Access Layer Switch (User Connectivity)
+! Snapshots: 1-5 (Complete Deployment)
+! ============================================================================
+! 
+!  INSTRUCTIONS FOR DEPLOYMENT:
+!  - Replace [DEPT_NAME] with department identifier: 
+!   Examples: "ACC", "CINEMA", "MNGR", "MATH", "INFO", "PHYS"
+!  - Replace [MGMT_IP] with unique management IP in the building subnet:
+!   * Faculty Building (FP):   200.200.20.X (where X = 31, 32, 33...)
+!   * Annex Building (ANNEX):  200.200.30.X (where X = 31, 32, 33...)
+! - Replace [DIST_PO] with the Port-Channel number matching the Distribution switch:
+!   * Faculty switches use:   21, 22, 23
+!    * Annex switches use:     31, 32, 33
+! ============================================================================
 
 enable
-conf t
-hostname SW1_AN_DEPT_INFORMATICS
+configure terminal
 
-banner motd #
---------------------------------------
-SW1_AN_DEPT_INFORMATICS
---------------------------------------#
+! ============================================================================
+!  SNAPSHOT 1: BASE CONFIGURATION & DEVICE HARDENING
+!  ============================================================================
 
-! clock set 00:00:00 1 Jan 2000
-no ip domain-lookup
-enable secret enabled
-service password-encryption
-do wr
-
-line con 0
-logging synchronous
-password con@2025
-login
-exec-timeout 150 0
-exit 
-do wr
-
-line vty 0 15
-logging synchronous
-password vty@2025
-login
-exec-timeout 150 0
-exit 
-do wr
-
-!ip http server
-!ip http secure-server
-!no ip http server
-!no ip http-server
-
+! --- Hostname & Domain ---
+hostname SW1_A_DEPT_[DEPT_NAME]
 ip domain-name IT.AC.MA
-crypto key generate rsa
-yes
-1024
-ip ssh version 2
 
-line vty 0 15
-transport input ssh
-transport output ssh
-login local
-exit
+! --- Security Banner ---
+banner motd #
+-------------------------------------------------------
+SW1_A_DEPT_[DEPT_NAME] - SWITCH ACCES
+Acces reserve aux utilisateurs autorises.  
+Toute tentative d'intrusion sera journalisee. 
+-------------------------------------------------------
+#
+
+! --- System Services ---
+no ip domain-lookup
+service password-encryption
+service timestamps log datetime msec
+service timestamps debug datetime msec
+
+! --- Passwords & Secrets ---
+enable secret class
+
+! --- Local User Account ---
+username mngr privilege 15 secret mngr@2025
+
+! --- Disable Insecure Services ---
+no ip http server
+no ip http secure-server
+
+! --- SSH Configuration ---
+crypto key generate rsa general-keys modulus 1024
+ip ssh version 2
 ip ssh time-out 120
 ip ssh authentication-retries 3
-aaa new-model
-aaa authentication login default local
-username mngr password mngr@2025
-do wr
 
-! ==== VTP CONF. ====
+!  --- Console Line ---
+line console 0
+ logging synchronous
+ password con@2025
+ login
+ exec-timeout 15 0
+ exit
 
+! --- VTY Lines (SSH Only) ---
+line vty 0 15
+ logging synchronous
+ password vty@2025
+ transport input ssh
+ transport output ssh
+ login local
+ exec-timeout 15 0
+ exit
+
+!  ============================================================================
+!  SNAPSHOT 1: VTP CLIENT CONFIGURATION
+! ============================================================================
+
+!  --- VTP Client (Receives VLAN Database from Core) ---
 vtp mode client
-vtp domain IT.AC.MA        
-vtp password Vtp@2025       
-vtp version 2
-exit
-wr
+vtp domain IT.AC.MA
+vtp password Vtp@2025
 
-! ==== SWITCHPORT CONF. ====
+! ============================================================================
+! SNAPSHOT 2: INFRASTRUCTURE SERVICES (NTP, SYSLOG)
+! ============================================================================
 
-conf t
-interface gig 0/1
-switchport mode trunk
-switchport trunk allowed vlan 100,101,110,111,120,121,130,131,140,141,190,191,200,201
-no shutdown
-exit
+! --- NTP Configuration ---
+ntp server 200.200.200.110
+ntp authenticate
+ntp trusted-key 1
+ntp authentication-key 1 md5 ntp@2025
 
-! ADMIN GROUP (Ports 1-2)
-! Data: 130 | Voice: 131
-interface range FastEthernet0/1 - 2
-description ADMIN_USERS
-switchport mode access
-switchport access vlan 130
-switchport voice vlan 131
-! spanning-tree portfast
-no shutdown
-exit
+! --- Syslog Configuration ---
+logging on
+logging host 200.200.200.110
+logging trap debugging
 
-! PROF GROUP (Ports 3-5)
+! ============================================================================
+!  SNAPSHOT 3: ETHERCHANNEL - UPLINK TO DISTRIBUTION
+! ============================================================================
+
+! --- Physical Interfaces for EtherChannel ---
+interface range GigabitEthernet 0/1 - 2
+ description UPLINK_TO_DISTRIBUTION
+ switchport mode trunk
+ switchport trunk allowed vlan 100,101,110,111,120,121,130,131,140,141,190,191,200,201
+ channel-group 1 mode active
+ exit
+
+!   --- Logical Port-Channel Interface ---
+interface port-channel 1
+ description ETHERCHANNEL_TO_DIST
+ switchport mode trunk
+ switchport trunk allowed vlan 100,101,110,111,120,121,130,131,140,141,190,191,200,201
+ exit
+
+! ============================================================================
+!  SNAPSHOT 1: USER ACCESS PORTS (DATA + VOICE VLANs)
+! ============================================================================
+
+! --- ADMIN GROUP (Ports 1-2) ---
+! Data:  130 | Voice: 131
+interface range FastEthernet 0/1 - 2
+ description ADMIN_USERS
+ switchport mode access
+ switchport access vlan 130
+ switchport voice vlan 131
+ spanning-tree portfast
+ no shutdown
+ exit
+
+! --- PROF GROUP (Ports 3-5) ---
 ! Data: 120 | Voice: 121
-interface range FastEthernet0/3 - 5
-description PROF_USERS
-switchport mode access
-switchport access vlan 120
-switchport voice vlan 121
-! spanning-tree portfast
-no shutdown
-exit
+interface range FastEthernet 0/3 - 5
+ description PROF_USERS
+ switchport mode access
+ switchport access vlan 120
+ switchport voice vlan 121
+ spanning-tree portfast
+ no shutdown
+ exit
 
-! ETD GROUP (Ports 6-10)
+!   --- STUDENT GROUP (Ports 6-10) ---
 ! Data: 110 | Voice: 111
-interface range FastEthernet0/6 - 10
-description ETD_STUDENTS
-switchport mode access
-switchport access vlan 110
-switchport voice vlan 111
-! spanning-tree portfast
-no shutdown
-exit
+interface range FastEthernet 0/6 - 10
+ description ETD_STUDENTS
+ switchport mode access
+ switchport access vlan 110
+ switchport voice vlan 111
+ spanning-tree portfast
+ no shutdown
+ exit
 
-! HOST GROUP (Ports 11-14)
+!  --- GUEST/HOST GROUP (Ports 11-14) ---
 ! Data: 140 | Voice: 141
-interface range FastEthernet0/11 - 14
-description HOST_USERS
-switchport mode access
-switchport access vlan 140
-switchport voice vlan 141
-! spanning-tree portfast
-no shutdown
-exit
+interface range FastEthernet 0/11 - 14
+ description HOST_USERS
+ switchport mode access
+ switchport access vlan 140
+ switchport voice vlan 141
+ spanning-tree portfast
+ no shutdown
+ exit
 
-! WIRELESS GROUP (Ports 15-18)
+! --- WIRELESS AP GROUP (Ports 15-18) ---
 ! Data: 190 | Voice: 191
-interface range FastEthernet0/15 - 18
-description WIRELESS_APS
-switchport mode access
-switchport access vlan 190
-switchport voice vlan 191
-! spanning-tree portfast
-no shutdown
-exit
-do wr
+interface range FastEthernet 0/15 - 18
+ description WIRELESS_APS
+ switchport mode access
+ switchport access vlan 190
+ switchport voice vlan 191
+ spanning-tree portfast
+ no shutdown
+ exit
 
-! ==== MNGR SVI CONF. ====
+! ============================================================================
+!  SNAPSHOT 3: PORT SECURITY (ACTIVE USER PORTS)
+! ============================================================================
 
-conf t
-interface vlan200
-ip address 200.200.20.21 255.255.0.0
-no shutdown
-do wr
-exit
+!  --- Secure Active Ports (Fa0/1 - Fa0/18) ---
+interface range FastEthernet 0/1 - 18
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ switchport port-security aging time 60
+ exit
 
+! ============================================================================
+!  SNAPSHOT 3: UNUSED PORTS (BLACKHOLE SECURITY)
+! ============================================================================
+
+!  --- Secure and Disable Unused Ports ---
+interface range FastEthernet 0/19 - 24
+ description UNUSED_PORTS_BLACKHOLE
+ switchport mode access
+ switchport access vlan 999
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation shutdown
+ shutdown
+ exit
+
+! ============================================================================
+!  SNAPSHOT 3: DHCP SNOOPING CONFIGURATION
+!  ============================================================================
+
+! --- Enable DHCP Snooping Globally ---
+ip dhcp snooping
+ip dhcp snooping vlan 100-201
+no ip dhcp snooping information option
+
+! --- Trust Uplink to Distribution ---
+interface range GigabitEthernet 0/1 - 2
+ ip dhcp snooping trust
+ exit
+
+! --- Rate Limit User Ports ---
+interface range FastEthernet 0/1 - 18
+ ip dhcp snooping limit rate 10
+ exit
+
+! ============================================================================
+! SNAPSHOT 4: MANAGEMENT ACCESS (JUMP HOST SECURITY)
+! ============================================================================
+
+! --- Standard ACL:  Only Core Switch Can SSH ---
+ip access-list standard JUMP_HOST_ONLY
+ remark Allow only Core Switch Management IP
+ permit 200.200.255.254
+ deny any
+ exit
+
+! --- Apply to VTY Lines ---
+line vty 0 15
+ access-class JUMP_HOST_ONLY in
+ exit
+
+! ============================================================================
+!  SNAPSHOT 1: MANAGEMENT SVI (IN-BAND MANAGEMENT)
+! ============================================================================
+
+!  --- Management VLAN Interface ---
+interface vlan 200
+ description MGMT_INTERFACE
+ ip address [MGMT_IP] 255.255.0.0
+ no shutdown
+ exit
+
+!  --- Default Gateway (Points to Core) ---
 ip default-gateway 200.200.255.254
 
-! ==== ETHERCHANNEL CONF. ====
+!  ============================================================================
+! FINAL STEPS: SAVE CONFIGURATION
+!  ============================================================================
 
-conf t
+end
+write memory
 
-interface range gigabitEthernet 0/1 - 2
-switchport mode trunk
-channel-group 1 mode active
-exit
-
-interface port-channel 1
-switchport mode trunk
-exit
+! ============================================================================
+!  END OF SW_ACCESS_UNIVERSAL CONFIGURATION
+!  Total Snapshots:  5
+! Last Updated: 2026-01-05
+!  ============================================================================
