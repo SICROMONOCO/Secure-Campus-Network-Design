@@ -1,169 +1,258 @@
-! ==== MLS2_MAIN_ANNEX CONFIGURATION ====
-! ==== BASIC CONF. ====
+! ============================================================================
+! MLS1_[FP/ANNEX] - COMPLETE CONFIGURATION SCRIPT (TEMPLATE)
+! Project:  Secure Campus Network Design
+! Device Role:  Distribution Switch (Faculty/Annex Buildings)
+! Snapshots: 1-5 (Complete Deployment)
+! ============================================================================
+!
+!  INSTRUCTIONS FOR DEPLOYMENT:
+! - Replace [BUILDING] with "FP" or "ANNEX"
+! - Replace [MGMT_IP] with unique management IP: 
+!   * MLS1_FP:      200.200.20.10
+!   * MLS1_ANNEX:   200.200.30.10
+!  - Replace [CORE_PO] with the Port-Channel number to Core: 
+!   * MLS1_FP:     3
+!   * MLS1_ANNEX:  4
+!  ============================================================================
 
 enable
-conf t
-hostname MLS2_MAIN_ANNEX
+configure terminal
 
-banner motd #
---------------------------------------
-MLS2_MAIN_ANNEX
---------------------------------------#
+! ============================================================================
+!  SNAPSHOT 1: BASE CONFIGURATION & DEVICE HARDENING
+!  ============================================================================
 
-! clock set 00:00:00 1 Jan 2000
-no ip domain-lookup
-enable secret enabled
-service password-encryption
-do wr
-
-line con 0
-logging synchronous
-password con@2025
-login
-exec-timeout 150 0
-exit 
-do wr
-
-line vty 0 15
-logging synchronous
-password vty@2025
-login
-exec-timeout 150 0
-exit 
-do wr
-
-!ip http server
-!ip http secure-server
-!no ip http server
-!no ip http-server
-
+! --- Hostname & Domain ---
+hostname MLS1_[BUILDING]
 ip domain-name IT.AC.MA
-crypto key generate rsa
-1024
-ip ssh version 2
 
-line vty 0 15
-transport input ssh
-transport output ssh
-login local
-exit
+! --- Security Banner ---
+banner motd #
+-------------------------------------------------------
+MLS1_[BUILDING] - SWITCH DISTRIBUTION
+Acces reserve aux administrateurs autorises.  
+Toute tentative d'intrusion sera journalisee. 
+-------------------------------------------------------
+#
+
+! --- System Services ---
+no ip domain-lookup
+service password-encryption
+service timestamps log datetime msec
+service timestamps debug datetime msec
+
+! --- Passwords & Secrets ---
+enable secret class
+
+! --- Local User Account ---
+username mngr privilege 15 secret mngr@2025
+
+! --- Disable Insecure Services ---
+no ip http server
+no ip http secure-server
+
+! --- SSH Configuration ---
+crypto key generate rsa general-keys modulus 1024
+ip ssh version 2
 ip ssh time-out 120
 ip ssh authentication-retries 3
-aaa new-model
-aaa authentication login default local
-username mngr password mngr@2025
-do wr
 
-! ==== VTP CONF. ====
+!  --- Console Line ---
+line console 0
+ logging synchronous
+ password con@2025
+ login
+ exec-timeout 15 0
+ exit
 
+! --- VTY Lines (SSH Only) ---
+line vty 0 15
+ logging synchronous
+ password vty@2025
+ transport input ssh
+ transport output ssh
+ login local
+ exec-timeout 15 0
+ exit
+
+!  ============================================================================
+! SNAPSHOT 1: VTP CLIENT CONFIGURATION
+! ============================================================================
+
+! --- VTP Client (Receives VLAN Database from Core) ---
 vtp mode client
-vtp domain IT.AC.MA        
-vtp password Vtp@2025       
-vtp version 2
-exit
-wr
+vtp domain IT. AC.MA
+vtp password Vtp@2025
 
-! ==== SWITCHPORT CONF. ====
+! ============================================================================
+! SNAPSHOT 2: INFRASTRUCTURE SERVICES (NTP, SYSLOG, AAA)
+! ============================================================================
 
-conf t
-! Core MLS uplink
-int gig 1/0/23
-! switchport trunk encapsluation dot1q
-switchport mode trunk
-switchport trunk allowed vlan 100,101,110,111,120,121,130,131,140,141,190,191,200,201
-exit
+! --- NTP Configuration ---
+ntp server 200.200.200.110
+ntp authenticate
+ntp trusted-key 1
+ntp authentication-key 1 md5 ntp@2025
 
-! To Access SWs downlink
-int range gig 1/0/1 - 6
-! switchport trunk encapsluation dot1q
-switchport mode trunk
-switchport trunk allowed vlan 100,101,110,111,120,121,130,131,140,141,190,191,200,201
-exit
+! --- Syslog Configuration ---
+logging on
+logging host 200.200.200.110
+logging trap debugging
 
-! ==== MNGR SVI CONF. ====
+! --- AAA & RADIUS Configuration ---
+aaa new-model
 
-conf t
-interface vlan200
-ip address 200.200.100.102 255.255.0.0
-no shutdown
-wr
-exit
+radius server RADIUS_SERVER
+ address ipv4 200.200.200.110 auth-port 1645
+ key 123456789A
+ exit
+
+aaa authentication login default group radius local
+aaa authentication enable default enable
+
+line console 0
+ login authentication default
+ exit
+
+line vty 0 15
+ login authentication default
+ exit
+
+! ============================================================================
+!  SNAPSHOT 3: ETHERCHANNEL - UPLINK TO CORE
+! ============================================================================
+
+! --- Physical Interfaces for EtherChannel to Core ---
+interface range GigabitEthernet 1/0/23 - 24
+ description UPLINK_TO_CORE
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 100,101,110,111,120,121,130,131,140,141,190,191,200,201
+ channel-group [CORE_PO] mode active
+ exit
+
+! --- Logical Port-Channel Interface ---
+interface port-channel [CORE_PO]
+ description ETHERCHANNEL_TO_CORE
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 100,101,110,111,120,121,130,131,140,141,190,191,200,201
+ exit
+
+! ============================================================================
+! SNAPSHOT 3: ETHERCHANNEL - DOWNLINKS TO ACCESS SWITCHES
+! ============================================================================
+
+! --- NOTES ON PORT-CHANNEL NUMBERING SCHEME ---
+! MLS1_FP uses:    Po21 (DEPT_MNGR), Po22 (DEPT_ACC), Po23 (DEPT_CINE)
+! MLS1_ANNEX uses: Po31 (DEPT_MATH), Po32 (DEPT_INFO), Po33 (DEPT_PHYS)
+
+! --- Link to Access Switch 1 (Department 1) ---
+interface range GigabitEthernet 1/0/5 - 6
+ description DOWNLINK_TO_ACCESS_SW1
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 100,101,110,111,120,121,130,131,140,141,190,191,200,201
+ channel-group [2X] mode active
+ exit
+
+interface port-channel [2X]
+ description ETHERCHANNEL_TO_ACCESS_SW1
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 100,101,110,111,120,121,130,131,140,141,190,191,200,201
+ exit
+
+! --- Link to Access Switch 2 (Department 2) ---
+interface range GigabitEthernet 1/0/3 - 4
+ description DOWNLINK_TO_ACCESS_SW2
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 100,101,110,111,120,121,130,131,140,141,190,191,200,201
+ channel-group [2X] mode active
+ exit
+
+interface port-channel [2X]
+ description ETHERCHANNEL_TO_ACCESS_SW2
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 100,101,110,111,120,121,130,131,140,141,190,191,200,201
+ exit
+
+! --- Link to Access Switch 3 (Department 3) ---
+interface range GigabitEthernet 1/0/1 - 2
+ description DOWNLINK_TO_ACCESS_SW3
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 100,101,110,111,120,121,130,131,140,141,190,191,200,201
+ channel-group [2X] mode active
+ exit
+
+interface port-channel [2X]
+ description ETHERCHANNEL_TO_ACCESS_SW3
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 100,101,110,111,120,121,130,131,140,141,190,191,200,201
+ exit
+
+! ============================================================================
+!  SNAPSHOT 3: DHCP SNOOPING CONFIGURATION
+!  ============================================================================
+
+! --- Enable DHCP Snooping Globally ---
+ip dhcp snooping
+ip dhcp snooping vlan 100-201
+no ip dhcp snooping information option
+
+! --- Trust Uplink to Core ---
+interface range GigabitEthernet 1/0/23 - 24
+ ip dhcp snooping trust
+ exit
+
+! --- Trust Downlinks to Access Switches ---
+interface range GigabitEthernet 1/0/1 - 6
+ ip dhcp snooping trust
+ exit
+
+! ============================================================================
+! SNAPSHOT 4: MANAGEMENT ACCESS (JUMP HOST SECURITY)
+! ============================================================================
+
+! --- Standard ACL:  Only Core Switch Can SSH ---
+ip access-list standard JUMP_HOST_ONLY
+ remark Allow only Core Switch Management IP
+ permit 200.200.255.254
+ deny any
+ exit
+
+! --- Apply to VTY Lines ---
+line vty 0 15
+ access-class JUMP_HOST_ONLY in
+ exit
+
+! ============================================================================
+!  SNAPSHOT 1: MANAGEMENT SVI (IN-BAND MANAGEMENT)
+! ============================================================================
+
+!  --- Management VLAN Interface ---
+interface vlan 200
+ description MGMT_INTERFACE
+ ip address [MGMT_IP] 255.255.0.0
+ no shutdown
+ exit
+
+! --- Default Gateway (Points to Core) ---
 ip default-gateway 200.200.255.254
 
-! ==== ETHERCHANNEL CONF. ====
+! ============================================================================
+! FINAL STEPS: SAVE CONFIGURATION
+! ============================================================================
 
-conf t
+end
+write memory
 
-! -- UPLINK to Core --
-! --- Connection to Core (Group 4) ---
-interface range gigabitEthernet 1/0/23 - 24
-switchport trunk encapsulation dot1q
-switchport mode trunk
-channel-group 4 mode active
-exit
-
-interface port-channel 4
-switchport mode trunk
-exit
-
-! -- DOWNLINK to ACCESS --
-! --- Connection to DEPT_MATH (Group 31) ---
-interface range gigabitEthernet 1/0/5 - 6
-switchport trunk encapsulation dot1q
-switchport mode trunk
-channel-group 31 mode active
-exit
-
-interface port-channel 31
-switchport mode trunk
-exit
-
-! --- Connection to DEPT_INFO (Group 32) ---
-interface range gigabitEthernet 1/0/3 - 4
-switchport trunk encapsulation dot1q
-switchport mode trunk
-channel-group 32 mode active
-exit
-
-interface port-channel 32
-switchport mode trunk
-exit
-
-! --- Connection to DEPT_PHYS (Group 33) ---
-interface range gigabitEthernet 1/0/1 - 2
-switchport trunk encapsulation dot1q
-switchport mode trunk
-channel-group 33 mode active
-exit
-
-interface port-channel 33
-switchport mode trunk
-exit
-
-! ==== DHCP SNOOPING CONF. ====
-
-conf t
-
-! Enable the feature globally
-ip dhcp snooping
-
-! Tell it which VLANs to secure (Add ALL your user/data/voice VLANs here)
-ip dhcp snooping vlan 100-201
-
-! This prevents the switch from inserting "Option 82" data which often blocks DHCP 
-! on non-Cisco DHCP servers.
-no ip dhcp snooping information option
-exit
-do wr
-
-configure terminal
-! Trust all downstream EtherChannels leading to Dist switches
-interface range gigabitEthernet 1/0/1 - 6
-ip dhcp snooping trust
-exit
-
-configure terminal
-! Trust all Upstreames EtherChannels leading to Core
-interface range gigabitEthernet 1/0/23 - 24
-ip dhcp snooping trust
-exit
+! ============================================================================
+!  END OF MLS1_[BUILDING] CONFIGURATION
+! Total Snapshots:  5
+! Last Updated: 2026-01-05
+!  ============================================================================
