@@ -1,0 +1,302 @@
+! ============================================================================
+! Cisco IOS Configuration Modularizer & Deduplicator - Barebone Templates
+! Scope: CORE_MLS, SW1_SERVER, SW1_ADMIN, MLS1_* and SW1_A_DEPT_* variants
+! ============================================================================
+
+! =========================
+! PLACEHOLDER CONVENTIONS
+! =========================
+! <HOSTNAME>                 Device hostname
+! <DOMAIN_NAME>              DNS domain (example: IT.AC.MA)
+! <MOTD_TEXT>                Banner text body
+! <ENABLE_SECRET>            Enable secret
+! <LOCAL_ADMIN_USER>         Local admin username
+! <LOCAL_ADMIN_SECRET>       Local admin secret
+! <FALLBACK_USER>            Optional AAA fallback user
+! <FALLBACK_SECRET>          Optional AAA fallback secret
+! <CONSOLE_PASSWORD>         Console line password
+! <VTY_PASSWORD>             VTY line password (if used)
+! <RSA_MODULUS>              RSA modulus (example: 1024)
+! <VTP_MODE>                 server | client
+! <VTP_DOMAIN>               VTP domain
+! <VTP_PASSWORD>             VTP password
+! <NTP_SERVER_IP>            NTP server IP
+! <NTP_KEY_ID>               NTP key id
+! <NTP_KEY_SECRET>           NTP MD5 key
+! <SYSLOG_SERVER_IP>         Syslog server IP
+! <RADIUS_SERVER_IP>         RADIUS server IP
+! <RADIUS_AUTH_PORT>         RADIUS auth port
+! <RADIUS_SHARED_KEY>        RADIUS shared secret
+! <MGMT_VLAN_ID>             Management VLAN ID
+! <MGMT_IP>                  Device management IP
+! <MGMT_MASK>                Management mask
+! <DEFAULT_GW_IP>            Default gateway (L2 switches)
+! <JUMP_HOST_IP>             SSH jump-host/Core management IP
+! <TRUNK_ALLOWED_VLANS>      Allowed VLAN list on trunks
+! <DHCP_SNOOPING_VLANS>      VLAN range/list for snooping
+! <DHCP_SERVER_IP>           DHCP server IP for relay
+! <UPLINK_IF_RANGE>          Physical uplink interfaces
+! <DOWNLINK_IF_RANGE>        Physical downlink interfaces
+! <PORTCHANNEL_ID>           Port-channel identifier
+! <ACCESS_IF_RANGE>          Access interface range
+! <ACCESS_DATA_VLAN>         Data VLAN for user profile
+! <ACCESS_VOICE_VLAN>        Voice VLAN for user profile
+! <BLACKHOLE_VLAN_ID>        Unused-port sink VLAN
+! <WAN_UPLINK_IF>            Routed uplink interface
+! <WAN_LOCAL_IP>             Local routed uplink IP
+! <WAN_MASK>                 Routed uplink mask
+! <WAN_NEXT_HOP>             Routed uplink next hop
+
+
+! =========================
+! MODULE 1 - BASE HARDENING (COMMON)
+! =========================
+enable
+configure terminal
+hostname <HOSTNAME>
+ip domain-name <DOMAIN_NAME>
+banner motd #
+<MOTD_TEXT>
+#
+no ip domain-lookup
+service password-encryption
+service timestamps log datetime msec
+service timestamps debug datetime msec
+enable secret <ENABLE_SECRET>
+username <LOCAL_ADMIN_USER> privilege 15 secret <LOCAL_ADMIN_SECRET>
+! Optional fallback account:
+! username <FALLBACK_USER> privilege 15 secret <FALLBACK_SECRET>
+no ip http server
+no ip http secure-server
+crypto key generate rsa general-keys modulus <RSA_MODULUS>
+ip ssh version 2
+ip ssh time-out 120
+ip ssh authentication-retries 3
+line console 0
+ logging synchronous
+ password <CONSOLE_PASSWORD>
+ login
+ exec-timeout 15 0
+ exit
+line vty 0 15
+ logging synchronous
+ password <VTY_PASSWORD>
+ transport input ssh
+ transport output ssh
+ login local
+ exec-timeout 15 0
+ exit
+
+
+! =========================
+! MODULE 2 - VTP ROLE
+! =========================
+vtp mode <VTP_MODE>
+vtp domain <VTP_DOMAIN>
+vtp password <VTP_PASSWORD>
+! Optional on server:
+! vtp version 2
+
+
+! =========================
+! MODULE 3 - INFRA SERVICES (NTP/SYSLOG/AAA)
+! =========================
+ntp server <NTP_SERVER_IP>
+ntp authenticate
+ntp trusted-key <NTP_KEY_ID>
+ntp authentication-key <NTP_KEY_ID> md5 <NTP_KEY_SECRET>
+logging on
+logging host <SYSLOG_SERVER_IP>
+logging trap debugging
+! Optional AAA/RADIUS block:
+! aaa new-model
+! radius server RADIUS_SERVER
+!  address ipv4 <RADIUS_SERVER_IP> auth-port <RADIUS_AUTH_PORT>
+!  key <RADIUS_SHARED_KEY>
+!  exit
+! aaa authentication login default group radius local
+! aaa authentication enable default enable
+! line console 0
+!  login authentication default
+!  exit
+! line vty 0 15
+!  login authentication default
+!  exit
+
+
+! =========================
+! MODULE 4 - ETHERCHANNEL TRUNK (REUSABLE)
+! =========================
+interface range <UPLINK_IF_RANGE>
+ description <UPLINK_DESCRIPTION>
+ ! Optional on platforms requiring explicit encapsulation:
+ ! switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan <TRUNK_ALLOWED_VLANS>
+ channel-group <PORTCHANNEL_ID> mode active
+ exit
+interface port-channel <PORTCHANNEL_ID>
+ description <PORTCHANNEL_DESCRIPTION>
+ ! Optional on platforms requiring explicit encapsulation:
+ ! switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan <TRUNK_ALLOWED_VLANS>
+ exit
+
+
+! =========================
+! MODULE 5 - ACCESS USER PORT PROFILE (REUSABLE)
+! =========================
+interface range <ACCESS_IF_RANGE>
+ description <ACCESS_DESCRIPTION>
+ switchport mode access
+ switchport access vlan <ACCESS_DATA_VLAN>
+ switchport voice vlan <ACCESS_VOICE_VLAN>
+ spanning-tree portfast
+ no shutdown
+ exit
+
+
+! =========================
+! MODULE 6 - PORT SECURITY (REUSABLE)
+! =========================
+interface range <SECURE_USER_IF_RANGE>
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ switchport port-security aging time 60
+ exit
+interface range <UNUSED_IF_RANGE>
+ description UNUSED_PORTS_BLACKHOLE
+ switchport mode access
+ switchport access vlan <BLACKHOLE_VLAN_ID>
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation shutdown
+ shutdown
+ exit
+
+
+! =========================
+! MODULE 7 - DHCP SNOOPING (REUSABLE)
+! =========================
+ip dhcp snooping
+ip dhcp snooping vlan <DHCP_SNOOPING_VLANS>
+no ip dhcp snooping information option
+interface range <TRUSTED_DHCP_IF_RANGE>
+ ip dhcp snooping trust
+ exit
+! Optional on client-facing access ports:
+! interface range <UNTRUSTED_RATE_LIMIT_IF_RANGE>
+!  ip dhcp snooping limit rate 10
+!  exit
+
+
+! =========================
+! MODULE 8 - MANAGEMENT PLANE ACL (REUSABLE)
+! =========================
+ip access-list standard JUMP_HOST_ONLY
+ remark Allow only approved jump host
+ permit <JUMP_HOST_IP>
+ deny any
+ exit
+line vty 0 15
+ access-class JUMP_HOST_ONLY in
+ exit
+
+
+! =========================
+! MODULE 9 - MGMT SVI (L2 SWITCHES)
+! =========================
+interface vlan <MGMT_VLAN_ID>
+ description MGMT_INTERFACE
+ ip address <MGMT_IP> <MGMT_MASK>
+ no shutdown
+ exit
+ip default-gateway <DEFAULT_GW_IP>
+
+
+! =========================
+! MODULE 10 - CORE L3 VLAN GATEWAYS
+! =========================
+ip routing
+! VLAN creation pattern:
+! vlan <VLAN_ID>
+!  name <VLAN_NAME>
+! ...
+! interface vlan <VLAN_ID>
+!  description <SVI_DESCRIPTION>
+!  ip address <SVI_GATEWAY_IP> <SVI_MASK>
+!  no shutdown
+!  exit
+! DHCP relay pattern (repeat per client VLAN):
+! interface vlan <CLIENT_VLAN_ID>
+!  ip helper-address <DHCP_SERVER_IP>
+!  exit
+
+
+! =========================
+! MODULE 11 - CORE INTER-VLAN ISOLATION ACL
+! =========================
+ip access-list extended ISOLATE_CLIENT_VLANS
+ remark Allow traffic to server VLAN
+ permit ip any <SERVER_VLAN_SUBNET> <SERVER_VLAN_WILDCARD>
+ remark Allow admin to management network
+ permit ip <ADMIN_SUBNET> <ADMIN_WILDCARD> <MGMT_SUBNET> <MGMT_WILDCARD>
+ remark Block east-west inter-VLAN private traffic
+ deny ip any 10.0.0.0 0.255.255.255
+ remark Allow northbound traffic
+ permit ip any any
+ exit
+! Apply inbound on selected client SVIs:
+! interface vlan <CLIENT_VLAN_ID>
+!  ip access-group ISOLATE_CLIENT_VLANS in
+!  exit
+
+
+! =========================
+! MODULE 12 - CORE WAN/CME UPLINK
+! =========================
+interface <WAN_UPLINK_IF>
+ description <WAN_DESCRIPTION>
+ no switchport
+ ip address <WAN_LOCAL_IP> <WAN_MASK>
+ no shutdown
+ exit
+ip route 0.0.0.0 0.0.0.0 <WAN_NEXT_HOP>
+
+
+! =========================
+! ROLE ASSEMBLY - ACCESS SWITCH (DEPARTMENT)
+! =========================
+! Apply modules: 1,2(client),3(NTP/Syslog),4(uplink),5(repeat per user group),6,7,8,9
+
+
+! =========================
+! ROLE ASSEMBLY - DISTRIBUTION SWITCH (BUILDING)
+! =========================
+! Apply modules: 1,2(client),3(optional AAA),4(uplink to core),4(repeat downlinks to access),7,8,9
+
+
+! =========================
+! ROLE ASSEMBLY - SERVER SWITCH
+! =========================
+! Apply modules: 1,2(client),3(NTP/Syslog),4(uplink to core),6(unused subset),7(with server port trusted),8,9
+
+
+! =========================
+! ROLE ASSEMBLY - CORE MLS
+! =========================
+! Apply modules: 1,2(server),3(with AAA),4(repeat to downstream distributions),7,10,11,12
+! Optional stricter core SSH ACL:
+! ip access-list standard SECURE_CORE_SSH
+!  permit <ADMIN_PC_IP>
+!  permit <MGMT_SUBNET> <MGMT_WILDCARD>
+!  deny any
+! line vty 0 15
+!  access-class SECURE_CORE_SSH in
+!  exit
+
+end
+write memory
