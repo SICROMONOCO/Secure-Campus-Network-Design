@@ -7,7 +7,7 @@
 ! PLACEHOLDER CONVENTIONS
 ! =========================
 ! <HOSTNAME>                 Device hostname
-! <DOMAIN_NAME>              DNS domain (example: IT.AC.MA)
+! <DOMAIN_NAME>              DNS domain (example: example.corp.com)
 ! <MOTD_TEXT>                Banner text body
 ! <ENABLE_SECRET>            Enable secret
 ! <LOCAL_ADMIN_USER>         Local admin username
@@ -187,7 +187,7 @@ interface range <ACCESS_IF_RANGE>
 ! MODULE 6 - PORT SECURITY (REUSABLE)
 ! =========================
 interface range <SECURE_USER_IF_RANGE>
- ! Set to 2 when one PC + one IP phone share the same port.
+ ! Typical value is 2 when one PC + one IP phone share the same port.
  ! Adjust this value for single-endpoint or multi-endpoint scenarios.
  ! If the interface range mixes different endpoint types, split ranges by policy.
  switchport port-security
@@ -310,7 +310,7 @@ ip route 0.0.0.0 0.0.0.0 <WAN_NEXT_HOP>
 ! =========================
 ! ROLE ASSEMBLY - DISTRIBUTION SWITCH (BUILDING)
 ! =========================
-! Apply modules: 1,2(client),3(optional AAA),4(uplink to core),4(repeat downlinks to access),7,8,9
+! Apply modules: 1,2(client),3(optional AAA),4a(uplink to core),4b(repeat downlinks to access),7,8,9
 
 
 ! =========================
