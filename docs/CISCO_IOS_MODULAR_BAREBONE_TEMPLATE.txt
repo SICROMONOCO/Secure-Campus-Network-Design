@@ -15,7 +15,7 @@
 ! <FALLBACK_USER>            Optional AAA fallback user
 ! <FALLBACK_SECRET>          Optional AAA fallback secret
 ! <CONSOLE_PASSWORD>         Console line password
-! <VTY_PASSWORD>             VTY line password (if used)
+! <VTY_PASSWORD>             VTY line password (local/fallback access)
 ! <RSA_MODULUS>              RSA modulus (example: 2048 minimum)
 ! <SSH_TIMEOUT_SECONDS>      SSH authentication timeout in seconds
 ! <VTP_MODE>                 server | client
@@ -190,6 +190,11 @@ interface range <SECURE_USER_IF_RANGE>
  ! Typical value is 2 when one PC + one IP phone share the same port.
  ! Adjust this value for single-endpoint or multi-endpoint scenarios.
  ! If the interface range mixes different endpoint types, split ranges by policy.
+ ! Example policy split:
+ ! interface range <SINGLE_ENDPOINT_IF_RANGE>
+ !  switchport port-security maximum 1
+ ! interface range <PC_PHONE_IF_RANGE>
+ !  switchport port-security maximum 2
  switchport port-security
  switchport port-security maximum <PORT_SECURITY_MAX_MAC>
  switchport port-security mac-address sticky
@@ -304,13 +309,13 @@ ip route 0.0.0.0 0.0.0.0 <WAN_NEXT_HOP>
 ! =========================
 ! ROLE ASSEMBLY - ACCESS SWITCH (DEPARTMENT)
 ! =========================
-! Apply modules: 1,2(client),3(NTP/Syslog),4(uplink),5(repeat per user group),6,7,8,9
+! Apply modules: 1,2(client),3(NTP/Syslog),4(uplink to distribution),5(repeat per user group),6,7,8,9
 
 
 ! =========================
 ! ROLE ASSEMBLY - DISTRIBUTION SWITCH (BUILDING)
 ! =========================
-! Apply modules: 1,2(client),3(optional AAA),4a(uplink to core),4b(repeat downlinks to access),7,8,9
+! Apply modules: 1,2(client),3(optional AAA),4(uplink to core),4(repeat for each downlink to access),7,8,9
 
 
 ! =========================
