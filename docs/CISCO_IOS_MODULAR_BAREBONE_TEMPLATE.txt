@@ -16,7 +16,8 @@
 ! <FALLBACK_SECRET>          Optional AAA fallback secret
 ! <CONSOLE_PASSWORD>         Console line password
 ! <VTY_PASSWORD>             VTY line password (if used)
-! <RSA_MODULUS>              RSA modulus (example: 1024)
+! <RSA_MODULUS>              RSA modulus (example: 2048 minimum)
+! <SSH_TIMEOUT_SECONDS>      SSH authentication timeout in seconds
 ! <VTP_MODE>                 server | client
 ! <VTP_DOMAIN>               VTP domain
 ! <VTP_PASSWORD>             VTP password
@@ -24,6 +25,7 @@
 ! <NTP_KEY_ID>               NTP key id
 ! <NTP_KEY_SECRET>           NTP MD5 key
 ! <SYSLOG_SERVER_IP>         Syslog server IP
+! <SYSLOG_TRAP_LEVEL>        Syslog trap level (recommended: informational)
 ! <RADIUS_SERVER_IP>         RADIUS server IP
 ! <RADIUS_AUTH_PORT>         RADIUS auth port
 ! <RADIUS_SHARED_KEY>        RADIUS shared secret
@@ -48,6 +50,8 @@
 ! <ACCESS_DATA_VLAN>         Data VLAN for user profile
 ! <ACCESS_VOICE_VLAN>        Voice VLAN for user profile
 ! <SECURE_USER_IF_RANGE>     Interface range for sticky+restrict port security
+! <PORT_SECURITY_MAX_MAC>    Port-security maximum MAC addresses
+! <PORT_SECURITY_AGING_MINUTES> Port-security aging time in minutes
 ! <UNUSED_IF_RANGE>          Interface range for shutdown/blackhole ports
 ! <UNUSED_PORTS_DESCRIPTION> Unused port description text
 ! <BLACKHOLE_VLAN_ID>        Unused-port sink VLAN
@@ -92,7 +96,7 @@ no ip http server
 no ip http secure-server
 crypto key generate rsa general-keys modulus <RSA_MODULUS>
 ip ssh version 2
-ip ssh time-out 120
+ip ssh time-out <SSH_TIMEOUT_SECONDS>
 ip ssh authentication-retries 3
 line console 0
  logging synchronous
@@ -129,7 +133,7 @@ ntp trusted-key <NTP_KEY_ID>
 ntp authentication-key <NTP_KEY_ID> md5 <NTP_KEY_SECRET>
 logging on
 logging host <SYSLOG_SERVER_IP>
-logging trap debugging
+logging trap <SYSLOG_TRAP_LEVEL>
 ! Optional AAA/RADIUS block:
 ! aaa new-model
 ! radius server RADIUS_SERVER
@@ -185,11 +189,13 @@ interface range <ACCESS_IF_RANGE>
 interface range <SECURE_USER_IF_RANGE>
  ! Set to 2 when one PC + one IP phone share the same port.
  ! Adjust this value for single-endpoint or multi-endpoint scenarios.
+ ! If the interface range mixes different endpoint types, split ranges by policy.
  switchport port-security
- switchport port-security maximum 2
+ switchport port-security maximum <PORT_SECURITY_MAX_MAC>
  switchport port-security mac-address sticky
  switchport port-security violation restrict
- switchport port-security aging time 60
+ ! Tune aging to endpoint churn/stability requirements.
+ switchport port-security aging time <PORT_SECURITY_AGING_MINUTES>
  exit
 interface range <UNUSED_IF_RANGE>
  description <UNUSED_PORTS_DESCRIPTION>
