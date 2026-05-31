@@ -1,6 +1,6 @@
 ! ============================================================================
 ! Cisco IOS Configuration Modularizer & Deduplicator - Barebone Templates
-! Scope: CORE_MLS, SW1_SERVER, SW1_ADMIN, MLS1_* and SW1_A_DEPT_* variants
+! Scope: CORE_MLS, SW1_SERVER, SW1_ADMIN, MLS1_<BUILDING> and SW1_A_DEPT_<DEPT> variants
 ! ============================================================================
 
 ! =========================
@@ -38,14 +38,29 @@
 ! <UPLINK_IF_RANGE>          Physical uplink interfaces
 ! <DOWNLINK_IF_RANGE>        Physical downlink interfaces
 ! <PORTCHANNEL_ID>           Port-channel identifier
+! <UPLINK_DESCRIPTION>       Physical uplink description text
+! <PORTCHANNEL_DESCRIPTION>  Logical port-channel description text
 ! <ACCESS_IF_RANGE>          Access interface range
+! <ACCESS_DESCRIPTION>       Access port description text
 ! <ACCESS_DATA_VLAN>         Data VLAN for user profile
 ! <ACCESS_VOICE_VLAN>        Voice VLAN for user profile
+! <SECURE_USER_IF_RANGE>     Interface range for sticky+restrict port security
+! <UNUSED_IF_RANGE>          Interface range for shutdown/blackhole ports
 ! <BLACKHOLE_VLAN_ID>        Unused-port sink VLAN
+! <TRUSTED_DHCP_IF_RANGE>    DHCP snooping trusted interface range
+! <UNTRUSTED_RATE_LIMIT_IF_RANGE> DHCP snooping rate-limited access range
+! <SERVER_VLAN_SUBNET>       Server VLAN subnet
+! <SERVER_VLAN_WILDCARD>     Server VLAN wildcard mask
+! <ADMIN_SUBNET>             Admin subnet
+! <ADMIN_WILDCARD>           Admin subnet wildcard mask
+! <MGMT_SUBNET>              Management subnet
+! <MGMT_WILDCARD>            Management subnet wildcard mask
 ! <WAN_UPLINK_IF>            Routed uplink interface
+! <WAN_DESCRIPTION>          Routed uplink description text
 ! <WAN_LOCAL_IP>             Local routed uplink IP
 ! <WAN_MASK>                 Routed uplink mask
 ! <WAN_NEXT_HOP>             Routed uplink next hop
+! <ADMIN_PC_IP>              Administrative endpoint source IP
 
 
 ! =========================
