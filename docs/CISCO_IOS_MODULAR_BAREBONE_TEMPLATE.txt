@@ -50,6 +50,8 @@
 ! <ACCESS_DATA_VLAN>         Data VLAN for user profile
 ! <ACCESS_VOICE_VLAN>        Voice VLAN for user profile
 ! <SECURE_USER_IF_RANGE>     Interface range for sticky+restrict port security
+! <SINGLE_ENDPOINT_IF_RANGE> Interface range with one allowed endpoint MAC
+! <PC_PHONE_IF_RANGE>        Interface range with PC+phone dual endpoints
 ! <PORT_SECURITY_MAX_MAC>    Port-security maximum MAC addresses
 ! <PORT_SECURITY_AGING_MINUTES> Port-security aging time in minutes
 ! <UNUSED_IF_RANGE>          Interface range for shutdown/blackhole ports
@@ -122,6 +124,7 @@ vtp domain <VTP_DOMAIN>
 vtp password <VTP_PASSWORD>
 ! Optional on server:
 ! vtp version 2
+! Use VTP version 2 only when explicitly required by design/feature set.
 
 
 ! =========================
@@ -218,6 +221,8 @@ interface range <UNUSED_IF_RANGE>
 ! =========================
 ip dhcp snooping
 ip dhcp snooping vlan <DHCP_SNOOPING_VLANS>
+! Disable Option 82 by default to match existing campus templates.
+! Enable Option 82 when your DHCP architecture/policies require relay metadata.
 no ip dhcp snooping information option
 interface range <TRUSTED_DHCP_IF_RANGE>
  ip dhcp snooping trust
@@ -309,31 +314,36 @@ ip route 0.0.0.0 0.0.0.0 <WAN_NEXT_HOP>
 ! =========================
 ! ROLE ASSEMBLY - ACCESS SWITCH (DEPARTMENT)
 ! =========================
-! Apply modules: 1,2(client),3(NTP/Syslog),4(uplink to distribution),5(repeat per user group),6,7,8,9
+! Apply modules: 1(Base),2(VTP-client),3(Infra),4(Trunk uplink),5(User access),
+!                6(Port-security),7(DHCP snooping),8(Mgmt ACL),9(Mgmt SVI)
 
 
 ! =========================
 ! ROLE ASSEMBLY - DISTRIBUTION SWITCH (BUILDING)
 ! =========================
-! Apply modules: 1,2(client),3(optional AAA),4(uplink to core),4(repeat for each downlink to access),7,8,9
+! Apply modules: 1(Base),2(VTP-client),3(Infra+optional AAA),4(Trunks: core and downlinks),
+!                7(DHCP snooping),8(Mgmt ACL),9(Mgmt SVI)
 
 
 ! =========================
 ! ROLE ASSEMBLY - ADMIN DISTRIBUTION SWITCH
 ! =========================
-! Apply modules: 1,2(client),3(NTP/Syslog),4(uplink to core),5(admin office endpoint),6,7,8,9
+! Apply modules: 1(Base),2(VTP-client),3(Infra),4(Trunk uplink),5(Admin endpoint),
+!                6(Port-security),7(DHCP snooping),8(Mgmt ACL),9(Mgmt SVI)
 
 
 ! =========================
 ! ROLE ASSEMBLY - SERVER SWITCH
 ! =========================
-! Apply modules: 1,2(client),3(NTP/Syslog),4(uplink to core),6(unused subset),7(with server port trusted),8,9
+! Apply modules: 1(Base),2(VTP-client),3(Infra),4(Trunk uplink),6(Unused-port security),
+!                7(DHCP snooping + trusted server/uplink),8(Mgmt ACL),9(Mgmt SVI)
 
 
 ! =========================
 ! ROLE ASSEMBLY - CORE MLS
 ! =========================
-! Apply modules: 1,2(server),3(with AAA),4(repeat to downstream distributions),7,10,11,12
+! Apply modules: 1(Base),2(VTP-server),3(Infra+AAA),4(Trunks to downstream),
+!                7(DHCP snooping),10(L3 VLAN gateways),11(Isolation ACL),12(WAN uplink)
 ! Optional stricter core SSH ACL:
 ! ip access-list standard SECURE_CORE_SSH
 !  permit <ADMIN_PC_IP>
