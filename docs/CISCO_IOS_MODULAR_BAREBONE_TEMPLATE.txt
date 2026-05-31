@@ -46,6 +46,7 @@
 ! <ACCESS_VOICE_VLAN>        Voice VLAN for user profile
 ! <SECURE_USER_IF_RANGE>     Interface range for sticky+restrict port security
 ! <UNUSED_IF_RANGE>          Interface range for shutdown/blackhole ports
+! <UNUSED_PORTS_DESCRIPTION> Unused port description text
 ! <BLACKHOLE_VLAN_ID>        Unused-port sink VLAN
 ! <TRUSTED_DHCP_IF_RANGE>    DHCP snooping trusted interface range
 ! <UNTRUSTED_RATE_LIMIT_IF_RANGE> DHCP snooping rate-limited access range
@@ -55,6 +56,7 @@
 ! <ADMIN_WILDCARD>           Admin subnet wildcard mask
 ! <MGMT_SUBNET>              Management subnet
 ! <MGMT_WILDCARD>            Management subnet wildcard mask
+! <MGMT_SVI_DESCRIPTION>     Management SVI description text
 ! <WAN_UPLINK_IF>            Routed uplink interface
 ! <WAN_DESCRIPTION>          Routed uplink description text
 ! <WAN_LOCAL_IP>             Local routed uplink IP
@@ -183,7 +185,7 @@ interface range <SECURE_USER_IF_RANGE>
  switchport port-security aging time 60
  exit
 interface range <UNUSED_IF_RANGE>
- description UNUSED_PORTS_BLACKHOLE
+ description <UNUSED_PORTS_DESCRIPTION>
  switchport mode access
  switchport access vlan <BLACKHOLE_VLAN_ID>
  switchport port-security
@@ -225,7 +227,7 @@ line vty 0 15
 ! MODULE 9 - MGMT SVI (L2 SWITCHES)
 ! =========================
 interface vlan <MGMT_VLAN_ID>
- description MGMT_INTERFACE
+ description <MGMT_SVI_DESCRIPTION>
  ip address <MGMT_IP> <MGMT_MASK>
  no shutdown
  exit
