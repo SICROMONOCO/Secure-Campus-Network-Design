@@ -32,6 +32,9 @@
 ! <MGMT_MASK>                Management mask
 ! <DEFAULT_GW_IP>            Default gateway (L2 switches)
 ! <JUMP_HOST_IP>             SSH jump-host/Core management IP
+! <JUMP_HOST_SUBNET>         SSH jump-host subnet (optional alternative)
+! <JUMP_HOST_WILDCARD>       SSH jump-host subnet wildcard
+! <SECONDARY_JUMP_HOST_IP>   Additional jump-host IP (optional)
 ! <TRUNK_ALLOWED_VLANS>      Allowed VLAN list on trunks
 ! <DHCP_SNOOPING_VLANS>      VLAN range/list for snooping
 ! <DHCP_SERVER_IP>           DHCP server IP for relay
@@ -56,6 +59,8 @@
 ! <ADMIN_WILDCARD>           Admin subnet wildcard mask
 ! <MGMT_SUBNET>              Management subnet
 ! <MGMT_WILDCARD>            Management subnet wildcard mask
+! <ISOLATION_BLOCK_SUBNET>   Subnet to block for east-west isolation
+! <ISOLATION_BLOCK_WILDCARD> Wildcard mask for blocked isolation subnet
 ! <MGMT_SVI_DESCRIPTION>     Management SVI description text
 ! <WAN_UPLINK_IF>            Routed uplink interface
 ! <WAN_DESCRIPTION>          Routed uplink description text
@@ -178,6 +183,8 @@ interface range <ACCESS_IF_RANGE>
 ! MODULE 6 - PORT SECURITY (REUSABLE)
 ! =========================
 interface range <SECURE_USER_IF_RANGE>
+ ! Set to 2 when one PC + one IP phone share the same port.
+ ! Adjust this value for single-endpoint or multi-endpoint scenarios.
  switchport port-security
  switchport port-security maximum 2
  switchport port-security mac-address sticky
@@ -216,6 +223,10 @@ interface range <TRUSTED_DHCP_IF_RANGE>
 ip access-list standard JUMP_HOST_ONLY
  remark Allow only approved jump host
  permit <JUMP_HOST_IP>
+ ! Optional subnet-based alternative:
+ ! permit <JUMP_HOST_SUBNET> <JUMP_HOST_WILDCARD>
+ ! Optional additional hosts:
+ ! permit <SECONDARY_JUMP_HOST_IP>
  deny any
  exit
 line vty 0 15
@@ -261,8 +272,8 @@ ip access-list extended ISOLATE_CLIENT_VLANS
  permit ip any <SERVER_VLAN_SUBNET> <SERVER_VLAN_WILDCARD>
  remark Allow admin to management network
  permit ip <ADMIN_SUBNET> <ADMIN_WILDCARD> <MGMT_SUBNET> <MGMT_WILDCARD>
- remark Block east-west inter-VLAN private traffic
- deny ip any 10.0.0.0 0.255.255.255
+ remark Block east-west inter-VLAN traffic per design scope
+ deny ip any <ISOLATION_BLOCK_SUBNET> <ISOLATION_BLOCK_WILDCARD>
  remark Allow northbound traffic
  permit ip any any
  exit
@@ -294,6 +305,12 @@ ip route 0.0.0.0 0.0.0.0 <WAN_NEXT_HOP>
 ! ROLE ASSEMBLY - DISTRIBUTION SWITCH (BUILDING)
 ! =========================
 ! Apply modules: 1,2(client),3(optional AAA),4(uplink to core),4(repeat downlinks to access),7,8,9
+
+
+! =========================
+! ROLE ASSEMBLY - ADMIN DISTRIBUTION SWITCH
+! =========================
+! Apply modules: 1,2(client),3(NTP/Syslog),4(uplink to core),5(admin office endpoint),6,7,8,9
 
 
 ! =========================
